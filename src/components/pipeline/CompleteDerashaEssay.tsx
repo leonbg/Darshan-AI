@@ -17,7 +17,9 @@ import {
   Languages,
   ExternalLink,
   AlignLeft,
+  Feather,
 } from 'lucide-react';
+import { getToneMeta } from '../../utils/toneAdvisor';
 import {
   Phase1AnalysisResult,
   FinalDerasha,
@@ -136,6 +138,13 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
   const methodMeta = useMemo(() => getMethodologyMeta(activeMethodId), [activeMethodId]);
   const activeDuration: DerashaDuration =
     derasha.duracion || phase1Data?.duracion || '10_MIN';
+  const activeToneMeta = useMemo(
+    () =>
+      derasha.resolvedTone || phase1Data?.resolvedTone
+        ? getToneMeta(derasha.resolvedTone || phase1Data?.resolvedTone)
+        : null,
+    [derasha.resolvedTone, phase1Data?.resolvedTone]
+  );
   const complementaryIds =
     derasha.metodologiasComplementarias ||
     phase1Data?.metodologiasComplementarias ||
@@ -307,6 +316,16 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                 {durationBadgeLabel} ({allWords} palabras)
               </span>
             </span>
+
+            {activeToneMeta && (
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${activeToneMeta.badgeClass}`}
+                title={derasha.toneAdvisory || activeToneMeta.description}
+              >
+                <Feather className="w-3.5 h-3.5" />
+                <span>{activeToneMeta.shortLabel}</span>
+              </span>
+            )}
 
             {complementaryIds.map((compId) => {
               const compMeta = getMethodologyMeta(compId);

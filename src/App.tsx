@@ -58,11 +58,13 @@ import {
   FollowUpItem,
   DerashaMethodology,
   DerashaDuration,
+  DerashaTone,
   MethodologyDeliberationResult,
   ArchivedDerashaEntry,
   ComparativeDerashaAnalysisResult,
   DerashaRelationType,
 } from './types';
+import { composeAudienceAndTone } from './utils/toneAdvisor';
 import { AlertTriangle, ShieldCheck, RotateCcw, HardDrive } from 'lucide-react';
 import { clearLocalAppStorageForDriveMode } from './services';
 
@@ -75,8 +77,9 @@ export default function App() {
     DerashaMethodology[]
   >([]);
   const [audienciaOTono, setAudienciaOTono] = useState<string>(
-    'Comunidad general · Inspirador y práctico'
+    'Comunidad general · Tono automático según el tema'
   );
+  const [tonoHomiletico, setTonoHomiletico] = useState<DerashaTone>('AUTO');
   const [isRtl, setIsRtl] = useState(false);
 
   // Modal states
@@ -188,6 +191,7 @@ export default function App() {
     duracion,
     metodologiasComplementarias,
     audienciaOTono,
+    tonoHomiletico,
     calendarData,
     phase1Data,
     verifiedSources,
@@ -206,6 +210,7 @@ export default function App() {
     duracion,
     metodologiasComplementarias,
     audienciaOTono,
+    tonoHomiletico,
     calendarData,
     phase1Data,
     verifiedSources,
@@ -240,6 +245,7 @@ export default function App() {
         setDuracion(act.duracion);
         setMetodologiasComplementarias(act.metodologiasComplementarias || []);
         setAudienciaOTono(act.audienciaOTono);
+        if (act.tonoHomiletico) setTonoHomiletico(act.tonoHomiletico);
         setPhase1Data(act.phase1Data);
         setVerifiedSources(act.verifiedSources || []);
         setFinalDerasha(act.finalDerasha);
@@ -281,6 +287,7 @@ export default function App() {
             setMetodologiasComplementarias(parsed.metodologiasComplementarias);
           }
           if (parsed.audienciaOTono) setAudienciaOTono(parsed.audienciaOTono);
+          if (parsed.tonoHomiletico) setTonoHomiletico(parsed.tonoHomiletico);
           setPhase1Data(parsed.phase1Data);
           setVerifiedSources(Array.isArray(parsed.verifiedSources) ? parsed.verifiedSources : []);
           setFinalDerasha(parsed.finalDerasha);
@@ -304,6 +311,7 @@ export default function App() {
         duracion,
         metodologiasComplementarias,
         audienciaOTono,
+        tonoHomiletico,
         phase1Data,
         verifiedSources,
         finalDerasha,
@@ -432,6 +440,7 @@ export default function App() {
       metodologia: currentMethod,
       metodologiasComplementarias: currentComp,
       audienciaOTono: currentAudience,
+      tonoHomiletico: currentTone,
     } = latestStateRef.current;
 
     if (
@@ -456,6 +465,7 @@ export default function App() {
       duracion: '30_MIN',
       metodologiasComplementarias: currentComp,
       audienciaOTono: currentAudience,
+      tonoHomiletico: currentTone,
       maxRefs: 6,
     })
       .then((res) => {
@@ -712,6 +722,7 @@ export default function App() {
                 duracion: st.duracion,
                 metodologiasComplementarias: st.metodologiasComplementarias,
                 audienciaOTono: st.audienciaOTono,
+                tonoHomiletico: st.tonoHomiletico,
                 phase1Data: st.phase1Data,
                 verifiedSources: st.verifiedSources,
                 finalDerasha: st.finalDerasha,
@@ -867,6 +878,7 @@ export default function App() {
           duracion: st.duracion,
           metodologiasComplementarias: st.metodologiasComplementarias,
           audienciaOTono: st.audienciaOTono,
+          tonoHomiletico: st.tonoHomiletico,
           prewarmedCache: st.prewarmedCache,
           inFlightPrewarmPromise: inFlightPrewarmForQuery,
           isRunStillActive: () => activeRunIdRef.current === currentRunId,
@@ -1015,6 +1027,7 @@ export default function App() {
           newDuration,
           extraMethodology,
           audienciaOTono: st.audienciaOTono,
+          tonoHomiletico: st.tonoHomiletico,
           phase1Data: st.phase1Data,
           verifiedSources: st.verifiedSources,
         });
@@ -1333,7 +1346,14 @@ export default function App() {
           metodologiasComplementarias={metodologiasComplementarias}
           onChangeMetodologiasComplementarias={setMetodologiasComplementarias}
           audienciaOTono={audienciaOTono}
-          onChangeAudienciaOTono={setAudienciaOTono}
+          onChangeAudienciaOTono={(nextAud) => {
+            setAudienciaOTono(composeAudienceAndTone(nextAud, tonoHomiletico));
+          }}
+          tonoHomiletico={tonoHomiletico}
+          onChangeTonoHomiletico={(nextTone) => {
+            setTonoHomiletico(nextTone);
+            setAudienciaOTono((prev) => composeAudienceAndTone(prev, nextTone));
+          }}
           onSubmit={handleSubmitInput}
           isLoading={isLoading}
           isRtl={isRtl}

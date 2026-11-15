@@ -28,6 +28,7 @@ export async function executePhase1And2Pipeline(
   const p1Result = await requestPhase1Analysis(params.effectiveQuery, {
     metodologia: resolution.resolvedMethodology,
     audiencia_o_tono: params.audienciaOTono,
+    tono_homiletico: params.tonoHomiletico,
     duracion: params.duracion,
     metodologias_complementarias: resolution.complementaryMethodologies,
   });
@@ -44,6 +45,7 @@ export async function executePhase1And2Pipeline(
     detectedMetodologia: resolvedMethodology,
     duracion: params.duracion,
     metodologiasComplementarias: complementaryMethodologies,
+    ...(params.tonoHomiletico ? { tonoHomiletico: p1Result.tonoHomiletico || params.tonoHomiletico } : {}),
     logicGateReason: resolution.evaluation.explanation,
     ...(thinkerDet?.detected ? { externalThinkerDetection: thinkerDet } : {}),
   };
@@ -170,6 +172,7 @@ export async function resolvePrewarmedOrExecutePhase1And2(
     duracion: params.duracion,
     metodologiasComplementarias: params.metodologiasComplementarias,
     audienciaOTono: params.audienciaOTono,
+    tonoHomiletico: params.tonoHomiletico,
     maxRefs: maxRefsForDuration,
     onStageChange: params.onStageChange,
     onPhase1Complete: params.onPhase1Complete,

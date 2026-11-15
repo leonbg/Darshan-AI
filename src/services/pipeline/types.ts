@@ -1,6 +1,7 @@
 import {
   DerashaDuration,
   DerashaMethodology,
+  DerashaTone,
   FinalDerasha,
   Phase1AnalysisResult,
   VerifiedSefariaSource,
@@ -18,6 +19,7 @@ export interface Phase1And2PipelineParams {
   duracion: DerashaDuration;
   metodologiasComplementarias: DerashaMethodology[];
   audienciaOTono: string;
+  tonoHomiletico?: DerashaTone;
   maxRefs?: number;
   onStageChange?: (stage: 'phase1_morphology' | 'phase2_sefaria') => void;
   onPhase1Complete?: (phase1Data: Phase1AnalysisResult) => void;
@@ -50,6 +52,7 @@ export interface Phase3DerashaSynthesisParams {
   complementaryMethodologies: DerashaMethodology[];
   duracion: DerashaDuration;
   audienciaOTono: string;
+  tonoHomiletico?: DerashaTone;
   phase1Data: Phase1AnalysisResult;
   verifiedSources: VerifiedSefariaSource[];
   fallbackThinkerDetection?: Phase1AnalysisResult['externalThinkerDetection'];

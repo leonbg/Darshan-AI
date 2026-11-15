@@ -1,6 +1,7 @@
 import {
   DerashaDuration,
   DerashaMethodology,
+  DerashaTone,
   FinalDerasha,
   Phase1AnalysisResult,
   PipelineStage,
@@ -19,6 +20,7 @@ export interface ExecuteFullDerashaPipelineParams {
   duracion: DerashaDuration;
   metodologiasComplementarias: DerashaMethodology[];
   audienciaOTono: string;
+  tonoHomiletico?: DerashaTone;
   prewarmedCache: PrewarmedPipelineCache | null;
   inFlightPrewarmPromise: Promise<PrewarmedPipelineCache | null> | null;
   isRunStillActive: () => boolean;
@@ -58,6 +60,7 @@ export async function executeFullDerashaPipeline(
     duracion: params.duracion,
     metodologiasComplementarias: params.metodologiasComplementarias,
     audienciaOTono: params.audienciaOTono,
+    tonoHomiletico: params.tonoHomiletico,
     maxRefs: maxRefsForDuration,
     prewarmedCache: params.prewarmedCache,
     inFlightPrewarmPromise: params.inFlightPrewarmPromise,
@@ -85,6 +88,7 @@ export async function executeFullDerashaPipeline(
     complementaryMethodologies: p1And2Result.complementaryMethodologies,
     duracion: params.duracion,
     audienciaOTono: params.audienciaOTono,
+    tonoHomiletico: params.tonoHomiletico,
     phase1Data: p1And2Result.phase1Data,
     verifiedSources: p1And2Result.verifiedSources,
     fallbackThinkerDetection: pipelineResolution.evaluation.externalThinkerDetection,

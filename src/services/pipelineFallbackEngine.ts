@@ -1,6 +1,7 @@
 import {
   DerashaDuration,
   DerashaMethodology,
+  DerashaTone,
   FinalDerasha,
   MethodologyDeliberationResult,
   Phase1AnalysisResult,
@@ -16,6 +17,17 @@ import {
 } from '../utils/methodologyLogicGates';
 import { detectExternalThinkerAndForceExegeticalSearch } from '../utils/externalThinkerDetector';
 import { resolveDerashaExecutiveSummary } from '../utils/derashaSummary';
+import {
+  composeAudienceAndTone,
+  getToneMeta,
+  normalizeDerashaTone,
+  resolveDerashaTone,
+} from '../utils/toneAdvisor';
+import {
+  distillTopicEssence,
+  sanitizeDerashaQuotedQuestions,
+} from '../utils/topicEssence';
+import { buildTopicGroundedExegeticAnalysis } from '../utils/topicExegeticFallback';
 
 /**
  * Deterministic Client-Side Backup & Fallback Engine (v2.0).
@@ -179,6 +191,42 @@ const CANONICAL_FALLBACK_SOURCES_MAP: Record<string, VerifiedSefariaSource> = {
     verified: true,
     statusText: 'Verificado en Respaldo Canónico Sefaria (v2.0)',
   },
+  'Psalms 139:4': {
+    ref: 'Psalms 139:4',
+    heRef: 'תהילים קל״ט:ד׳',
+    hebrewText: 'כִּי אֵין מִלָּה בִּלְשׁוֹנִי הֵן ה׳ יָדַעְתָּ כֻלָּהּ׃',
+    translation:
+      'For there is not a word on my tongue, behold, O Lord, You know it altogether.',
+    spanishTranslation:
+      'Pues aún no está la palabra en mi lengua, y he aquí Tú, Eterno, ya la conoces por completo.',
+    url: 'https://www.sefaria.org/Psalms.139.4',
+    verified: true,
+    statusText: 'Verificado en Respaldo Canónico Sefaria (v2.0)',
+  },
+  'Proverbs 18:21': {
+    ref: 'Proverbs 18:21',
+    heRef: 'משלי י״ח:כ״א',
+    hebrewText: 'מָוֶת וְחַיִּים בְּיַד לָשׁוֹן וְאֹהֲבֶיהָ יֹאכַל פִּרְיָהּ׃',
+    translation:
+      'Death and life are in the power of the tongue, and those who love it shall eat its fruit.',
+    spanishTranslation:
+      'La muerte y la vida están en poder de la lengua, y quienes la cultivan comerán de su fruto.',
+    url: 'https://www.sefaria.org/Proverbs.18.21',
+    verified: true,
+    statusText: 'Verificado en Respaldo Canónico Sefaria (v2.0)',
+  },
+  'Pirkei Avot 2:1': {
+    ref: 'Pirkei Avot 2:1',
+    heRef: 'פרקי אבות ב׳:א׳',
+    hebrewText: 'הִסְתַּכֵּל בִּשְׁלֹשָׁה דְבָרִים וְאֵי אַתָּה בָא לִידֵי עֲבֵרָה: דַּע מַה לְּמַעְלָה מִמְּךָ, עַיִן רוֹאָה וְאֹזֶן שׁוֹמַעַת וְכָל מַעֲשֶׂיךָ בַּסֵּפֶר נִכְתָּבִים.',
+    translation:
+      'Reflect upon three things and you will not come into the hands of transgression: Know what is above you—an eye that sees, an ear that hears, and all your deeds are written in a book.',
+    spanishTranslation:
+      'Reflexiona en tres cosas y no caerás en transgresión: sabe qué hay por encima de ti: un Ojo que ve, un Oído que escucha y que todos tus actos quedan inscritos en el libro.',
+    url: 'https://www.sefaria.org/Pirkei_Avot.2.1',
+    verified: true,
+    statusText: 'Verificado en Respaldo Canónico Sefaria (v2.0)',
+  },
 };
 
 export function getCanonicalFallbackSource(ref: string): VerifiedSefariaSource {
@@ -207,13 +255,21 @@ export function buildClientMethodologyDeliberationFallback(
   const primary = resolution30.resolvedMethodology;
   const comp30 = resolution30.complementaryMethodologies;
   const comp10 = comp30.slice(0, 1);
+  const toneEval = resolveDerashaTone(
+    'AUTO',
+    query,
+    primary,
+    resolution30.evaluation.halakhicValidation
+  );
 
   return {
     query,
     recommendedPrimary: primary,
     recommendedComplementaryFor10Min: comp10,
     recommendedComplementaryFor30Min: comp30,
-    deliberationSummary: `${resolution30.evaluation.explanation} (Modo Respaldo Determinista v2.0)`,
+    recommendedTone: toneEval.recommendedTone,
+    toneRationale: toneEval.recommendationReason,
+    deliberationSummary: `${resolution30.evaluation.explanation} · Tono sugerido: ${getToneMeta(toneEval.recommendedTone).shortLabel}. (Modo Respaldo Determinista v2.0)`,
     candidates: [
       {
         methodology: primary,
@@ -247,6 +303,7 @@ export function buildClientPhase1Fallback(
     metodologia?: DerashaMethodology;
     metodologias_complementarias?: DerashaMethodology[];
     duracion?: DerashaDuration;
+    tono_homiletico?: DerashaTone;
   }
 ): Phase1AnalysisResult {
   const query = (rawQuery || 'Estudio de la Tradición').trim();
@@ -259,6 +316,12 @@ export function buildClientPhase1Fallback(
     duracion,
     options?.metodologias_complementarias
   );
+  const toneEval = resolveDerashaTone(
+    options?.tono_homiletico,
+    query,
+    resolution.resolvedMethodology,
+    halakhicValidation
+  );
   const thinkerDet = halakhicValidation.externalPhilosophyInjectionDisabled
     ? undefined
     : detectExternalThinkerAndForceExegeticalSearch(query);
@@ -267,7 +330,12 @@ export function buildClientPhase1Fallback(
     /\b(halel|hallel|rosh\s+j[oó]desh|rosh\s+chodesh|j[oó]desh\s+mal[eé]|j[oó]desh\s+jaser|mes\s+que\s+termina)\b/i.test(
       query
     );
+  const isSpeechEthics =
+    /\b(palabras?|habla(?:r)?|lengua|lash[oó]n\s+har[aá]|chisme|maledicencia|silencio|nadie\s+(?:nos\s+)?escucha|en\s+privado|soledad)\b/i.test(
+      query
+    );
   const isPureHalakha = halakhicValidation.isPurelyHalakhic;
+  const cleanEssenceTitle = distillTopicEssence(query);
 
   const selectedRefs: Array<{
     ref: string;
@@ -334,6 +402,33 @@ export function buildClientPhase1Fallback(
           category: 'Talmud',
         },
       ]
+    : isSpeechEthics
+    ? [
+        {
+          ref: 'Psalms 139:4',
+          heRef: 'תהילים קל״ט:ד׳',
+          rationale: 'Conciencia de la presencia divina antes incluso de que la palabra llegue a los labios.',
+          category: 'Tanaj',
+        },
+        {
+          ref: 'Proverbs 18:21',
+          heRef: 'משלי י״ח:כ״א',
+          rationale: 'La potencia constructiva o destructiva del habla humana («Mávet ve-jaim be-yad lashón»).',
+          category: 'Tanaj',
+        },
+        {
+          ref: 'Pirkei Avot 2:1',
+          heRef: 'פרקי אבות ב׳:א׳',
+          rationale: '«Un Ojo que ve y un Oído que escucha»: responsabilidad moral en lo público y en lo secreto.',
+          category: 'Mishná',
+        },
+        {
+          ref: 'Pirkei Avot 1:17',
+          heRef: 'פרקי אבות א׳:י״ז',
+          rationale: 'La sobriedad en el hablar y la primacía de la acción ética concreta (HaMaasé).',
+          category: 'Mishná',
+        },
+      ]
     : [
         {
           ref: 'Kiddushin 31a',
@@ -360,23 +455,27 @@ export function buildClientPhase1Fallback(
   const rawResult: Phase1AnalysisResult = {
     title: isHalel
       ? 'El Halel (הַלֵּל) en la Halajá, el Talmud y el Shulján Aruj: Halel Shalem vs. Jatsi Halel, Minhag y Núsaj'
-      : isPureHalakha
-      ? `Estudio Halájico en el Shulján Aruj, Minhag y Núsaj: ${query}`
-      : `Estudio Exegético de la Tradición: ${query}`,
+      : cleanEssenceTitle,
     primaryHebrew: isHalel
       ? 'הַלְלוּיָהּ הַלְלוּ עַבְדֵי ה׳ · מִנְהַג אֲבוֹתֵיהֶם בִּידֵיהֶם'
       : isPureHalakha
-      ? 'שֻׁלְחָן ערוּךְ · מִנְהַג יִשְׂרָאֵל תּוֹרָה הִיא'
+      ? 'שֻׁלְחָן עָרוּךְ · מִנְהַג יִשְׂרָאֵל תּוֹרָה הִיא'
+      : isSpeechEthics
+      ? 'מָוֶת וְחַיִּים בְּיַד לָשׁוֹן · כִּי אֵין מִלָּה בִּלְשׁוֹנִי'
       : 'כִּי נֵר מִצְוָה וְתוֹרָה אוֹר וְדֶרֶךְ חַיִּים תּוֹכְחוֹת מוּסָר',
     transliteration: isHalel
       ? 'Haleluyá Halelú Avdei Hashem · Minhag Avoteijem BeYadeijem'
       : isPureHalakha
       ? 'Shulján Aruj · Minhag Yisrael Torá Hi'
+      : isSpeechEthics
+      ? 'Mávet ve-jaim be-yad lashón · Ki ein milá bilshoní'
       : 'Ki Ner Mitzvá veTorá Or veDérej Jaim Tojejot Musar',
     literalSpanishTranslation: isHalel
       ? 'Alaben los siervos de Hashem (Salmos 113:1) · La costumbre de sus ancestros está en sus manos (Taanit 28b).'
       : isPureHalakha
       ? 'Mesa Preparada (Código de la Halajá) · La costumbre de Israel es Torá.'
+      : isSpeechEthics
+      ? 'La muerte y la vida están en poder de la lengua; pues aún no hay palabra en mi lengua que Tú no conozcas.'
       : 'Porque lámpara es el mandamiento y la Torá es luz, y camino de vida son las enseñanzas éticas.',
     liturgicalContext: isPureHalakha
       ? `Corpus Halájico Interno · ${halakhicValidation.halakhicDomainLabels.join(' · ')} (Sin citas filosóficas externas)`
@@ -409,6 +508,36 @@ export function buildClientPhase1Fallback(
             tense: 'Litúrgico',
             theologicalImplication:
               'Cada Núsaj de plegaria refleja una de las doce puertas espirituales de las tribus de Israel hacia el Creador.',
+          },
+        ]
+      : isSpeechEthics
+      ? [
+          {
+            hebrewWord: 'לָשׁוֹן',
+            root: 'ל-שׁ-ן',
+            rootMeaning: 'Lengua, facultad articulatoria del habla y expresión moral',
+            binyan: 'Sustantivo femenino',
+            tense: 'Atemporal',
+            theologicalImplication:
+              'La misma palabra humana puede edificar vínculos o herir la dignidad del alma según la conciencia con que se pronuncia.',
+          },
+          {
+            hebrewWord: 'שְׁמִירָה',
+            root: 'שׁ-מ-ר',
+            rootMeaning: 'Custodiar, proteger con vigilancia constante',
+            binyan: 'Sustantivo de acción (Paal)',
+            tense: 'Activo continuo',
+            theologicalImplication:
+              'El cuidado del habla no depende de quién escucha afuera, sino de la vigilancia interior ante Hashem.',
+          },
+          {
+            hebrewWord: 'סֵתֶר',
+            root: 'ס-ת-ר',
+            rootMeaning: 'Oculto, ámbito privado sin testigos humanos',
+            binyan: 'Sustantivo masculino',
+            tense: 'Espacial / Interior',
+            theologicalImplication:
+              'La integridad real se prueba en lo secreto, donde solo Dios y la propia conciencia escuchan cada vocablo.',
           },
         ]
       : [
@@ -482,6 +611,9 @@ export function buildClientPhase1Fallback(
     detectedMetodologia: resolution.resolvedMethodology,
     metodologiasComplementarias: resolution.complementaryMethodologies,
     duracion,
+    tonoHomiletico: toneEval.requestedTone,
+    resolvedTone: toneEval.resolvedTone,
+    toneAdvisory: toneEval.advisoryReason,
     logicGateReason: gateEval.explanation,
     halakhicValidation,
     ...(thinkerDet?.detected ? { externalThinkerDetection: thinkerDet } : {}),
@@ -505,12 +637,14 @@ export function buildClientPhase3DerashaFallback(params: {
   metodologias_complementarias?: DerashaMethodology[];
   duracion?: DerashaDuration;
   audiencia_o_tono?: string;
+  tono_homiletico?: DerashaTone;
   title?: string;
   primaryHebrew?: string;
   transliteration?: string;
   literalSpanishTranslation?: string;
   liturgicalContext?: string;
   morphologicalBreakdown?: any[];
+  theologicalKeys?: any;
   verifiedSources?: VerifiedSefariaSource[];
 }): FinalDerasha {
   const query = (params.query || 'Estudio de la Tradición').trim();
@@ -523,19 +657,43 @@ export function buildClientPhase3DerashaFallback(params: {
     params.metodologias_complementarias
   );
   const metodologia = resolution.resolvedMethodology;
-  const audienciaOTono =
-    params.audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
-  const derashaTitle =
-    params.title ||
-    (halakhicValidation.isPurelyHalakhic
-      ? `Estudio Halájico en el Shulján Aruj, Minhag y Núsaj: ${query}`
-      : `Estudio Exegético (${metodologia}): ${query}`);
+  const requestedTone = normalizeDerashaTone(params.tono_homiletico);
+  const toneEval = resolveDerashaTone(
+    requestedTone,
+    query,
+    metodologia,
+    halakhicValidation
+  );
+  const audienciaOTono = composeAudienceAndTone(
+    params.audiencia_o_tono || 'Comunidad general',
+    requestedTone,
+    toneEval.resolvedTone
+  );
+  const derashaTitle = distillTopicEssence(query, params.title);
 
-  const openingExordium = halakhicValidation.isPurelyHalakhic
-    ? `Este estudio responde directamente a la consulta «${query}» desde las fuentes internas de la Halajá, el Talmud Bavli, Mishné Torá de Maimónides (incluyendo Hiljot Kidush HaJódesh 8:4 sobre por qué Rosh Jódesh es de 1 o 2 días según si el mes que termina tiene 29 días [Jódesh Jaser] o 30 días [Jódesh Malé]) y el Shulján Aruj (analizando tanto el dictamen de Rabí Yosef Karo —el Mejaber— para las comunidades Sefardíes y Edot HaMizraj, como las glosas de Rabí Moshé Isserles —el Ramá— para las comunidades Ashkenazíes, junto con los matices de Minhag y Núsaj). El Validador Halájico del Pipeline ha desactivado automáticamente toda inyección de citas filosóficas externas.`
-    : `A la luz de las fuentes clásicas de la Torá, la Mishná y el Talmud verificadas en la biblioteca de Sefaria, desarrollamos el análisis estructurado sobre «${query}» mediante la metodología ${metodologia} (${resolution.evaluation.gateTitle}), integrando precisión filológica hebrea y aplicación práctica.`;
+  const grounded = buildTopicGroundedExegeticAnalysis({
+    query,
+    effectiveTitle: derashaTitle,
+    metodologia,
+    complementaryMethodologies: resolution.complementaryMethodologies,
+    duracion,
+    primaryHebrew: params.primaryHebrew,
+    transliteration: params.transliteration,
+    literalSpanishTranslation: params.literalSpanishTranslation,
+    liturgicalContext: params.liturgicalContext,
+    morphologicalBreakdown: params.morphologicalBreakdown,
+    theologicalKeys: params.theologicalKeys,
+    verifiedSources: params.verifiedSources,
+    resolvedTone: toneEval.resolvedTone,
+  });
 
-  const pardes = halakhicValidation.isPurelyHalakhic
+  const isHalakhaFallback = halakhicValidation.isPurelyHalakhic;
+
+  const openingExordium = isHalakhaFallback
+    ? `El estudio sobre ${grounded.cleanEssence} parte directamente de las fuentes internas de la Halajá, el Talmud Bavli, Mishné Torá de Maimónides (incluyendo Hiljot Kidush HaJódesh 8:4 sobre por qué Rosh Jódesh es de 1 o 2 días según si el mes que termina tiene 29 días [Jódesh Jaser] o 30 días [Jódesh Malé]) y el Shulján Aruj (dialogando entre Rabí Yosef Karo —el Mejaber— y Rabí Moshé Isserles —el Ramá— junto con los matices de Minhag y Núsaj), manteniendo estricto apego al corpus jurídico judío.`
+    : grounded.openingExordium;
+
+  const pardes = isHalakhaFallback
     ? {
         pshat: {
           hebrewPillar: 'פְּשָׁט וַהֲלָכָה',
@@ -547,15 +705,15 @@ export function buildClientPhase3DerashaFallback(params: {
         },
         remez: {
           hebrewPillar: 'רֹאשׁ חֹדֶשׁ · חָסֵר וּמָלֵא',
-          title: '2. ¿Por qué Rosh Jódesh es de 1 o de 2 Días según Cuántos Días Tiene el Mes que Termina? (Oraj Jaim 427:1 y Hiljot Kidush HaJódesh 8:4)',
+          title: '2. Duración de Rosh Jódesh (1 o 2 Días) según los Días del Mes Saliente (Oraj Jaim 427:1 y Hiljot Kidush HaJódesh 8:4)',
           exposition:
-            'El ciclo lunar sinódico dura aproximadamente 29 días y medio (29 días, 12 horas y 793 jalakim). Como un mes calendario no puede comenzar a mitad del día (Talmud Rosh Hashaná 19b; Arjín 8b–9b), los meses del calendario hebreo tienen 29 días o 30 días, lo que determina directamente la duración de Rosh Jódesh (Rambam, Hiljot Kidush HaJódesh 8:4; Shulján Aruj, Oraj Jaim 427:1): 1) Cuando el mes que termina tiene 29 días («Jódesh Jaser» / חֹדֶשׁ חָסֵר, mes deficiente), Rosh Jódesh dura 1 solo día, que es el día 1 (Alef) del nuevo mes entrante; 2) Cuando el mes que termina tiene 30 días («Jódesh Malé» / חֹדֶשׁ מָלֵא, mes pleno), Rosh Jódesh dura 2 días: el primer día de Rosh Jódesh es el día 30 (Lámed) del mes que termina (mes saliente, cuando se completa el ciclo medio de 29.5 días) y el segundo día de Rosh Jódesh es el día 1 (Alef) del mes nuevo entrante (a partir del cual se cuentan los días del nuevo mes). En ambos días de un Rosh Jódesh de 2 días se recita por igual el Medio Halel (Jatsi Halel), Yaalé VeYavó, lectura de la Torá y Musaf.',
+            'El ciclo lunar sinódico dura aproximadamente 29 días y medio (29 días, 12 horas y 793 jalakim). Como un mes calendario no puede comenzar a mitad del día (Talmud Rosh Hashaná 19b; Arjín 8b–9b), los meses del calendario hebreo tienen 29 días o 30 días, lo que determina directamente la duración de Rosh Jódesh (Rambam, Hiljot Kidush HaJódesh 8:4; Shulján Aruj, Oraj Jaim 427:1): 1) Cuando el mes que termina tiene 29 días («Jódesh Jaser» / חֹדֶשׁ חָסֵר, mes deficiente), Rosh Jódesh dura 1 solo día, que es el día 1 (Alef) del nuevo mes entrante; 2) Cuando el mes que termina tiene 30 días («Jódesh Malé» / חֹדֶשׁ מָלֵא, mes pleno), Rosh Jódesh dura 2 días: el primer día de Rosh Jódesh es el día 30 (Lámed) del mes que termina (mes saliente) y el segundo día de Rosh Jódesh es el día 1 (Alef) del mes nuevo entrante. En ambos días de un Rosh Jódesh de 2 días se recita por igual el Medio Halel (Jatsi Halel), Yaalé VeYavó, lectura de la Torá y Musaf.',
           keyTakeaway:
-            'Si el mes que termina tiene 29 días (Jaser), Rosh Jódesh es de 1 día (el 1 del nuevo mes); si el mes que termina tiene 30 días (Malé), Rosh Jódesh es de 2 días (el día 30 del mes saliente + el día 1 del mes nuevo).',
+            'Si el mes que termina tiene 29 días (Jaser), Rosh Jódesh es de 1 día; si tiene 30 días (Malé), Rosh Jódesh es de 2 días (día 30 del mes saliente + día 1 del mes nuevo).',
         },
         drash: {
           hebrewPillar: 'דְּרָשׁ · מִנְהָג וְנוּסַח',
-          title: '3. Drash: La Distinción entre Halajá, Minhag (Costumbre) y Núsaj (Rito Litúrgico) en los Poskim',
+          title: '3. Drash: Distinción entre Halajá, Minhag (Costumbre) y Núsaj (Rito Litúrgico) en los Poskim',
           exposition:
             'La tradición rabínica y los Ajaronim (Mishná Berurá, Ben Ish Jai, Kaf HaJaim y Yalkut Yosef) distinguen con precisión entre Halajá (la estructura normativa común a todo Israel), Minhag (la costumbre ancestral vinculante de cada comunidad según Taanit 28b: «Minhag avoteijem be-yadeijem» y Yoré Deá 214:1: «No abandones la enseñanza de tu madre», Proverbios 1:8) y Núsaj (la formulación textual y melódica del Sidur en Oraj Jaim 68:1: Núsaj Sefarad / Edot HaMizraj, Núsaj Ashkenaz, Núsaj Sefard/Ari Jasídico y Núsaj Teimaní).',
           keyTakeaway:
@@ -570,296 +728,98 @@ export function buildClientPhase3DerashaFallback(params: {
             'Seguir con alegría y Kavaná la Halajá y el Minhag de nuestros padres une la precisión del precepto con la luz interior del alma.',
         },
       }
-    : metodologia === 'WISSENSCHAFT_DES_JUDENTUMS'
-    ? {
-        pshat: {
-          hebrewPillar: 'בִּקֹּרֶת הַנֻּסָּח וְכִתְבֵי יָד',
-          title: '1. Crítica Textual, Manuscritos y Variantes (Guenizá de El Cairo y Códices)',
-          exposition:
-            'El análisis histórico-filológico examina los testimonios manuscritos más antiguos (Códice Kaufmann de la Mishná, fragmentos de la Guenizá de El Cairo, Talmud Yerushalmi y Seder Rav Amram Gaón) para reconstruir las variantes textuales y la evolución redaccional del concepto.',
-          keyTakeaway:
-            'La comparación filológica entre el rito palestinense (Eretz Israel) y el rito babilónico revela la riqueza histórica de la transmisión.',
+    : grounded.pardes;
+
+  const methodologySections = isHalakhaFallback
+    ? [
+        {
+          key: 'halakha_pshat',
+          stepNumber: 1,
+          hebrewBadge: 'פ',
+          hebrewTerm: 'פְּשָׁט וַהֲלָכָה',
+          spanishSubtitle: '1. Codificación en el Shulján Aruj · Mejaber y Ramá',
+          title: pardes.pshat.title,
+          exposition: pardes.pshat.exposition,
+          keyTakeaway: pardes.pshat.keyTakeaway,
+          sourceMethodology: metodologia,
         },
-        remez: {
-          hebrewPillar: 'הִתְפַּתְּחוּת תַּנָּאִית וַאֲמוֹרָאִית',
-          title: '2. Estratos Redaccionales Tanaíticos y Amoraicos',
-          exposition:
-            'Desde las instituciones del Segundo Templo y Esdras el Escriba hasta la redacción de la Mishná por Rabí Yehudá HaNasí y las academias de Sura y Pumbedita, cada estrato rabínico articula respuestas normativas y espirituales a su contexto histórico.',
-          keyTakeaway:
-            'Comprender el Sitz im Leben de los Tanaím y Amoraím ilumina el sentido original de cada discusión talmúdica.',
+        {
+          key: 'halakha_cal',
+          stepNumber: 2,
+          hebrewBadge: 'ר',
+          hebrewTerm: 'רֹאשׁ חֹדֶשׁ · חָסֵר וּמָלֵא',
+          spanishSubtitle: '2. Estructura Calendárica · Oraj Jaim 427:1',
+          title: pardes.remez.title,
+          exposition: pardes.remez.exposition,
+          keyTakeaway: pardes.remez.keyTakeaway,
+          sourceMethodology: metodologia,
         },
-        drash: {
-          hebrewPillar: 'פְּסַק הֲלָכָה וְרִאשׁוֹנִים',
-          title: '3. Recepción en los Rishonim y Codificación Medieval',
-          exposition:
-            'Los comentaristas y codificadores medievales (Rashi, Tosafot, Rambam, Majzor Vitry, Tur y Shulján Aruj) sintetizaron las tradiciones textuales previas para establecer la práctica normativa de las comunidades.',
-          keyTakeaway:
-            'La continuidad entre los manuscritos geónicos y los códigos medievales demuestra la vitalidad orgánica de la tradición.',
+        {
+          key: 'halakha_minhag',
+          stepNumber: 3,
+          hebrewBadge: 'ד',
+          hebrewTerm: 'דְּרָשׁ · מִנְהָג וְנוּסַח',
+          spanishSubtitle: '3. Halajá, Minhag y Núsaj en los Poskim',
+          title: pardes.drash.title,
+          exposition: pardes.drash.exposition,
+          keyTakeaway: pardes.drash.keyTakeaway,
+          sourceMethodology: metodologia,
         },
-        sod: {
-          hebrewPillar: 'חָכְמַת יִשְׂרָאֵל וּמַשְׁמָעוּת',
-          title: '4. Exégesis Teológica Comparada y Significado Contemporáneo',
-          exposition:
-            'Siguiendo la escuela de Zunz, Elbogen y Heinemann, el rigor histórico-crítico no disminuye la santidad del texto, sino que permite apreciar cómo la revelación viva se encarna en la historia de Israel.',
-          keyTakeaway:
-            'Unir el rigor filológico con la sensibilidad espiritual enriquece el estudio del Bet Midrash.',
+        {
+          key: 'halakha_sod',
+          stepNumber: 4,
+          hebrewBadge: 'ס',
+          hebrewTerm: 'סוֹד',
+          spanishSubtitle: '4. Dimensión Interior · Las Doce Puertas',
+          title: pardes.sod.title,
+          exposition: pardes.sod.exposition,
+          keyTakeaway: pardes.sod.keyTakeaway,
+          sourceMethodology: metodologia,
         },
-      }
-    : metodologia === 'EVOLUCION_CONCEPTUAL'
-    ? {
-        pshat: {
-          hebrewPillar: 'תּוֹרָה וַחֲזַ״ל',
-          title: '1. En la Torá y Jazal: Raíz Bíblica y Fundamento Talmúdico',
-          exposition:
-            'En su estrato fundacional, el concepto brota de su raíz trilítera en el Tanaj y es desarrollado por los Sabios de la Mishná y el Talmud como norma ética y jurídica concreta en la vida comunitaria.',
-          keyTakeaway:
-            'La Torá Escrita y la Torá Oral establecen el cimiento relacional y normativo del concepto.',
-        },
-        remez: {
-          hebrewPillar: 'עֵץ חַיִּים וְקַבָּלָה',
-          title: '2. En el Árbol de la Vida de la Cábala (Sefirot y Zóhar)',
-          exposition:
-            'En la literatura cabalística (Zóhar, Pardés Rimonim de Ramak y Etz Jaim del Arizal), el concepto se proyecta en la arquitectura de las diez Sefirot, mostrando cómo cada acto humano despierta y equilibra los canales de flujo divino (Shefá).',
-          keyTakeaway:
-            'En el Árbol de la Vida, toda virtud ética armoniza la expansión (Jésed) con la contención sagrada (Guevurá) en Tiféret.',
-        },
-        drash: {
-          hebrewPillar: 'תְּנוּעַת הַמּוּסָר',
-          title: '3. Según el Musar: Trabajo Interior y Rectificación del Carácter (Tikkún HaMidot)',
-          exposition:
-            'Los maestros del Musar (Jovot HaLevavot, Mesilat Yesharim del Ramjal, Rabí Israel Salanter, el Alter de Kelm y el Alter de Slobodka) traducen la dimensión metafísica en una disciplina psicológica y ética de autoconocimiento (Jeshbón HaNéfesh).',
-          keyTakeaway:
-            'El Musar convierte el ideal espiritual en hábitos conscientes que transforman las fuerzas del alma.',
-        },
-        sod: {
-          hebrewPillar: 'חֲסִידוּת וּפְנִימִיּוּת',
-          title: '4. En la Jasidut y sus Escuelas (Baal Shem Tov, Jabad/Tania, Breslev y Sfat Emet)',
-          exposition:
-            'En el movimiento jasídico, el concepto se interioriza como experiencia viva de Devekut (adhesión al Creador) y alegría: desde la vitalidad cordial del Baal Shem Tov y la contemplación intelectual de Jabad (Tania), hasta la plegaria íntima deRabí Najmán de Breslev y la renovación interior del Sfat Emet.',
-          keyTakeaway:
-            'Las cuatro visiones convergen para revelar la luz divina en la realidad cotidiana (Dirá BeTajtonim).',
-        },
-      }
-    : metodologia === 'FILOSOFIA_CONTRASTIVA'
-    ? {
-        pshat: {
-          hebrewPillar: 'תּוֹרָה מוּל חָכְמַת הָעוֹלָם',
-          title: '1. Eje I: Fuentes Internas de la Torá frente a la Cosmovisión Filosófica Externa',
-          exposition:
-            'Siguiendo el principio midráshico «Si te dicen que hay sabiduría entre las naciones, créelo; que hay Torá entre las naciones, no lo creas» (Eijá Rabá 2:13), contrastamos la formulación del pensador externo con la revelación relacional del Sinaí.',
-          keyTakeaway:
-            'La filosofía busca verdades abstractas desde la razón autónoma; la Torá revela un vínculo vivo de alianza (Brit).',
-        },
-        remez: {
-          hebrewPillar: 'נֵר מִצְוָה וְתוֹרָה אוֹר',
-          title: '2. Eje II: Universalidad de la Ley Moral frente a Especificidad del Mandamiento',
-          exposition:
-            'A la luz de Proverbios 6:23 («Ki Ner Mitzvá veTorá Or») y Kidushín 31a («Gadol HaMetzuvé veOsé»), la ética judía no se detiene en máximas universales abstractas, sino que encarna el bien en el detalle concreto, temporal y relacional de cada Mitzvá.',
-          keyTakeaway:
-            'La especificidad del mandamiento concreto es la lámpara que hace habitar la luz universal en este mundo.',
-        },
-        drash: {
-          hebrewPillar: 'מַעֲשֶׂה הוּא הָעִקָּר',
-          title: '3. Respuesta desde las Fuentes Canónicas (Talmud, Rambam, Kuzari y Maharal)',
-          exposition:
-            'En Pirké Avot 1:17 («No es el estudio teórico lo principal, sino la acción»), Sanhedrín 56a y el Kuzari de Rabí Yehudá HaLeví, la grandeza humana no consiste en evadir el mundo material hacia la pura contemplación, sino en santificar la acción histórica.',
-          keyTakeaway:
-            'En el judaísmo, la acción ética concreta precede y perfecciona a la especulación teórica (Naasé veNishmá).',
-        },
-        sod: {
-          hebrewPillar: 'דִּירָה בַּתַּחְתּוֹנִים',
-          title: '4. Síntesis Exegética y Elevación Práctica',
-          exposition:
-            'El diálogo contrastivo reafirma que la dignidad humana (Tzelem Elohim) alcanza su plenitud cuando la mente, el corazón y las manos obran unidos en responsabilidad hacia el prójimo y hacia el Creador.',
-          keyTakeaway:
-            'Transformar cada idea elevada en un acto tangible de justicia (Tzedaká) y bondad (Jésed).',
-        },
-      }
-    : metodologia === 'PIRKE_AVOT_EXEGETICO'
-    ? {
-        pshat: {
-          hebrewPillar: 'דִּבְרֵי הַתַּנָּא',
-          title: '1. Contexto Histórico-Espiritual del Tanaíta y Sentido Literal de la Mishná',
-          exposition:
-            'Analizamos la máxima de Pirké Avot en su formulación hebrea concisa, situándola en la biografía espiritual del Sabio y en la cadena de transmisión ética desde el Sinaí (Avot 1:1).',
-          keyTakeaway:
-            'Cada palabra de los Tanaím en Avot es un principio condensado de vida comunitaria y carácter.',
-        },
-        remez: {
-          hebrewPillar: 'רַמְבַּ״ם · שְׁמוֹנָה פְּרָקִים',
-          title: '2. La Lectura Filosófica y Ética de Maimónides (Rambam)',
-          exposition:
-            'En su comentario a Avot y en Shemoná Perakim, el Rambam interpreta la Mishná desde la armonía de las facultades del alma y el camino del medio (Shvil HaZahav), orientando el carácter hacia el conocimiento y amor de Hashem.',
-          keyTakeaway:
-            'Para Maimónides, la excelencia ética es la salud del alma que permite la claridad espiritual.',
-        },
-        drash: {
-          hebrewPillar: 'רַבֵּנוּ יוֹנָה וּמַהֲרַ״ל',
-          title: '3. Contraste con Rabenu Yoná de Gerona y el Maharal de Praga (Dérej Jaim)',
-          exposition:
-            'Mientras Rambam enfatiza el equilibrio racional de las virtudes, Rabenu Yoná profundiza en la pureza de la intención (Yirat Shamayim) y el Maharal de Praga en Dérej Jaim revela la estructura ontológica de la Mishná como puente entre el individuo y el orden cósmico.',
-          keyTakeaway:
-            'El diálogo entre Rambam, Rabenu Yoná y el Maharal descubre múltiples dimensiones en una sola sentencia de Avot.',
-        },
-        sod: {
-          hebrewPillar: 'הֲלָכָה לְמַעֲשֶׂה · מִילֵי דַאֲבוֹת',
-          title: '4. Principio Vivo: Aplicación Contemporánea («Mán Davaí Lejaíé Jasiduta»)',
-          exposition:
-            'Como enseña el Talmud (Bava Kama 30a), quien desea alcanzar la piedad genuina debe cumplir las enseñanzas de Avot en sus decisiones diarias, su habla y su trato con cada persona.',
-          keyTakeaway:
-            'Traducir hoy la máxima tanaítica en una conducta ejemplar de integridad y respeto.',
-        },
-      }
-    : metodologia === 'MESILAT_YESHARIM_SISTEMATICO'
-    ? {
-        pshat: {
-          hebrewPillar: 'מַהוּת הַמִּדָּה',
-          title: '1. Mahut (Definición Esencial de la Virtud según el Ramjal)',
-          exposition:
-            'Siguiendo la arquitectura sistemática de Rabí Moshé Jaim Luzzatto en Mesilat Yesharim sobre la baraita de Rabí Pinjás ben Yaír (Avodá Zarah 20b), definimos la naturaleza exacta de este peldaño espiritual y su propósito en el perfeccionamiento humano.',
-          keyTakeaway:
-            'Toda virtud en Mesilat Yesharim comienza con la claridad intelectual sobre qué es el deber del ser humano en su mundo.',
-        },
-        remez: {
-          hebrewPillar: 'חֶלְקֵי הַמִּדָּה',
-          title: '2. Jalakim (Divisiones y Manifestaciones Prácticas)',
-          exposition:
-            'El Ramjal desglosa la cualidad en sus componentes concretos: cómo se manifiesta en el pensamiento, en la palabra y en el cuidado de los detalles tanto hacia el Creador como hacia el prójimo.',
-          keyTakeaway:
-            'La excelencia espiritual no es un sentimiento vago, sino una estructura ordenada de actos conscientes.',
-        },
-        drash: {
-          hebrewPillar: 'דֶּרֶךְ קִנְיָנָהּ',
-          title: '3. Dérej Kinyanó (Medios Prácticos para Adquirir la Virtud)',
-          exposition:
-            'Para adquirir la virtud, el Ramjal prescribe el estudio reflexivo constante, la preparación exterior que despierta el interior («HaJitzoniut meoreret et HaPnimiut») y el avance gradual peldaño a peldaño.',
-          keyTakeaway:
-            'Nadie asciende de golpe: la constancia diaria en actos pequeños transforma la naturaleza del corazón.',
-        },
-        sod: {
-          hebrewPillar: 'מַפְסִידֵי הַמִּדָּה',
-          title: '4. Mafsidayv (Obstáculos y Factores que Detienen la Virtud)',
-          exposition:
-            'Identificamos los impedimentos sutiles —la pesadez natural, la prisa irreflexiva, la compañía frívola y el autoengaño— y la estrategia del Ramjal para neutralizarlos con lucidez y alegría.',
-          keyTakeaway:
-            'Conocer los obstáculos de antemano es la mitad de la victoria en la senda de los rectos.',
-        },
-      }
-    : metodologia === 'MUSAR_TRANSFORMATIVO'
-    ? {
-        pshat: {
-          hebrewPillar: 'נְקֻדַּת הַחִכּוּךְ',
-          title: '1. Punto Focal: La Brecha entre el Intelecto y la Reacción Automática',
-          exposition:
-            'Siguiendo la escuela de Rabí Israel Salanter, aislamos el momento exacto de fricción conductual: cuando la mente conoce perfectamente la norma ética, pero el hábito emocional responde de forma impulsiva.',
-          keyTakeaway:
-            'El verdadero trabajo del Musar comienza allí donde nuestra teoría choca con nuestra reacción espontánea.',
-        },
-        remez: {
-          hebrewPillar: 'אִבְחוּן הַנֶּפֶשׁ וַנְּגִיעָה',
-          title: '2. Diagnóstico del Néfesh: Fuerzas Subconscientes e Interés Personal (Negiá)',
-          exposition:
-            'A la luz de Or Yisrael, el Alter de Kelm y el Mijtav MeEliahu de Rav Dessler, examinamos qué búsqueda de honor, temor o comodidad alimenta la reacción automática y nubla el juicio moral.',
-          keyTakeaway:
-            'Reconocer con honestidad nuestras motivaciones ocultas (Negiá) nos devuelve la libertad de elegir.',
-        },
-        drash: {
-          hebrewPillar: 'חֶשְׁבּוֹן הַנֶּפֶשׁ',
-          title: '3. Jeshbón HaNéfesh (Contabilidad del Alma y Visualización Emocional)',
-          exposition:
-            'El Musar enseña que para transformar una fuerza emocional no basta un argumento frío: es necesario grabar la verdad ética con emoción viva (Hitpaalut) y anticipar la situación de prueba antes de que ocurra.',
-          keyTakeaway:
-            'Cinco minutos diarios de Jeshbón HaNéfesh reprograman la respuesta del carácter en el momento de la prueba.',
-        },
-        sod: {
-          hebrewPillar: 'קַבָּלָה מַעֲשִׂית',
-          title: '4. Kabalá Maásit: Ejercicio Práctico de Transformación Diaria',
-          exposition:
-            'Establecemos una resolución pequeña, concreta y verificable (Kabalá) para practicar hoy mismo en el hogar y en la comunidad, consolidando un nuevo hábito de nobleza espiritual.',
-          keyTakeaway:
-            'Un compromiso pequeño pero inquebrantable abre una brecha de luz en todo el edificio del carácter.',
-        },
-      }
-    : {
-        pshat: {
-          hebrewPillar: 'פְּשָׁט',
-          title: '1. Pshat: Sentido Contextual y Raíz Bíblica',
-          exposition:
-            'El análisis directo del texto hebreo y sus raíces trilíteras establece la base firme sobre la cual se edifica toda interpretación tradicional, mostrando que la palabra de la Torá habla con claridad al intelecto y a la conciencia.',
-          keyTakeaway:
-            'El sentido literal (Pshat) es el cimiento indispensable de toda exégesis rabínica («Ein mikrá yotzé midei pshutó», Shabat 63a).',
-        },
-        remez: {
-          hebrewPillar: 'רֶמֶז',
-          title: '2. Rémez: Alusión Ética y Filosófica',
-          exposition:
-            'Cada término y estructura gramatical del pasaje alude a las leyes del crecimiento ético y la responsabilidad interpersonal, recordándonos que «lámpara es el mandamiento y la Torá es luz» (Proverbios 6:23).',
-          keyTakeaway:
-            'La luz universal de la Torá se ilumina paso a paso mediante la práctica específica.',
-        },
-        drash: {
-          hebrewPillar: 'דְּרָשׁ',
-          title: '3. Drash: Enseñanza de Jazal en el Talmud y el Midrash',
-          exposition:
-            'En la literatura talmúdica y midráshica (Kiddushin 31a; Pirkei Avot 1:17), los Sabios enfatizan que la grandeza espiritual reside en traducir el estudio en actos concretos de justicia (Tzedaká) y bondad amorosa (Guemilut Jasadim).',
-          keyTakeaway:
-            '«No es el estudio teórico lo principal, sino la acción transformadora» (Pirkei Avot 1:17).',
-        },
-        sod: {
-          hebrewPillar: 'סוֹד',
-          title: '4. Sod: Dimensión Interior y Elevación Cotidiana (Dirá BeTajtonim)',
-          exposition:
-            'En la dimensión profunda del alma, cada acción ética y cada Mitzvá revelan la presencia del Creador dentro de la realidad física cotidiana.',
-          keyTakeaway:
-            'Convertir nuestra vida diaria en una morada luminosa para la santidad y la paz.',
-        },
-      };
+      ]
+    : grounded.methodologySections;
+
+  const sectionsMarkdown = methodologySections
+    .map(
+      (sec) =>
+        `## ${sec.spanishSubtitle || `${sec.stepNumber}. ${sec.title}`}\n\n### ${sec.title}\n\n${sec.exposition}\n\n> **Principio clave:** ${sec.keyTakeaway}`
+    )
+    .join('\n\n');
 
   const markdown = `# ${derashaTitle}\n\n> **${params.primaryHebrew || ''}**  \n> *(${
     params.transliteration || ''
-  })* — «${params.literalSpanishTranslation || ''}»\n\n---\n\n## Exordio\n\n${openingExordium}\n\n## 1. ${
-    pardes.pshat.title
-  }\n\n${pardes.pshat.exposition}\n\n> **Principio clave:** ${
-    pardes.pshat.keyTakeaway
-  }\n\n## 2. ${pardes.remez.title}\n\n${pardes.remez.exposition}\n\n> **Principio clave:** ${
-    pardes.remez.keyTakeaway
-  }\n\n## 3. ${pardes.drash.title}\n\n${pardes.drash.exposition}\n\n> **Principio clave:** ${
-    pardes.drash.keyTakeaway
-  }\n\n## 4. ${pardes.sod.title}\n\n${pardes.sod.exposition}\n\n> **Principio clave:** ${
-    pardes.sod.keyTakeaway
-  }\n`;
+  })* — «${params.literalSpanishTranslation || ''}»\n\n---\n\n## Exordio\n\n${openingExordium}\n\n${sectionsMarkdown}\n\n---\n\n## Conclusión Práctica\n\n**${
+    grounded.practicalConclusion.title
+  }**\n\n- **Hashkafá:** ${grounded.practicalConclusion.hashkafa}\n- **Kavaná:** ${
+    grounded.practicalConclusion.prayerKavanah
+  }\n- **Acción concreta:** ${grounded.practicalConclusion.dailyAction}\n`;
 
   const rawDerasha: FinalDerasha = {
     derashaTitle,
     openingExordium,
     fullStructuredDerashaMarkdown: markdown,
     metodologia,
-    metodologiasComplementarias: params.metodologias_complementarias || [],
+    metodologiasComplementarias: resolution.complementaryMethodologies || [],
     duracion,
     audienciaOTono,
-    morphologicalSynthesis: {
-      summary:
-        'Las raíces hebreas analizadas revelan la unidad entre la norma halájica (Halajá), la tradición comunitaria viva (Minhag) y la intención del corazón (Kavaná).',
-      keyTheologicalInsight: openingExordium,
-    },
-    canonicalAnalysis: {
-      synthesis:
-        'Las fuentes canónicas verificadas en Sefaria trazan una línea continua desde el Tanaj y el Talmud hasta los códigos halájicos y el pensamiento ético.',
-      verifiedEchoes: (params.verifiedSources || []).map((s) => ({
-        ref: s.ref,
-        connection: s.spanishTranslation || s.translation,
-      })),
-    },
+    tonoHomiletico: requestedTone,
+    resolvedTone: toneEval.resolvedTone,
+    toneAdvisory: toneEval.advisoryReason,
+    methodologySections,
+    morphologicalSynthesis: grounded.morphologicalSynthesis,
+    canonicalAnalysis: grounded.canonicalAnalysis,
     pardes,
-    practicalConclusion: {
-      title: 'Conclusión Práctica y Llamada a la Acción',
-      hashkafa:
-        'La sabiduría de la Torá une el rigor de las fuentes con la calidez de la práctica cotidiana y el respeto por las tradiciones ancestrales.',
-      prayerKavanah:
-        'Al estudiar y recitar nuestras plegarias hoy, conectar cada palabra con la cadena viva de las generaciones.',
-      dailyAction:
-        'Cumplir hoy un precepto o acto de bondad con plena conciencia, alegría y atención a sus detalles.',
-    },
+    practicalConclusion: isHalakhaFallback
+      ? {
+          title: 'Síntesis Normativa y Criterio de Estudio Halájico',
+          hashkafa:
+            'La sabiduría de la Halajá une el rigor de las fuentes talmúdicas y del Shulján Aruj con el respeto vivo a las costumbres comunitarias (Minhag y Núsaj).',
+          prayerKavanah:
+            'Al recitar nuestras plegarias y observar los preceptos, conectar cada detalle normativo con la cadena viva de las generaciones.',
+          dailyAction:
+            'Verificar en la práctica diaria el Minhag y Núsaj de nuestra comunidad conforme al dictamen de nuestros Poskim.',
+        }
+      : grounded.practicalConclusion,
     halakhicValidation,
     stageTimingsMs: {
       stage3LlmMs: 8,
@@ -875,5 +835,13 @@ export function buildClientPhase3DerashaFallback(params: {
     params.verifiedSources || []
   );
 
-  return sanitizeHalakhicOutputFromExternalCitations(rawDerasha, halakhicValidation);
+  const sanitizedQuestions = sanitizeDerashaQuotedQuestions(
+    rawDerasha,
+    query,
+    derashaTitle
+  );
+  return sanitizeHalakhicOutputFromExternalCitations(
+    sanitizedQuestions,
+    halakhicValidation
+  );
 }

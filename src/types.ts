@@ -143,6 +143,9 @@ export interface Phase1AnalysisResult {
   detectedMetodologia?: DerashaMethodology;
   metodologiasComplementarias?: DerashaMethodology[];
   duracion?: DerashaDuration;
+  tonoHomiletico?: DerashaTone;
+  resolvedTone?: ResolvedDerashaTone;
+  toneAdvisory?: string;
   logicGateReason?: string;
   stageTimingsMs?: {
     stage1MorphologyMs: number;
@@ -179,6 +182,16 @@ export type DerashaMethodology =
 
 export type DerashaDuration = '5_MIN' | '10_MIN' | '30_MIN';
 
+export type DerashaTone =
+  | 'AUTO'
+  | 'MOTIVACION'
+  | 'ADVERTENCIA_CAUTELA'
+  | 'LLAMADO_ACCION'
+  | 'ASPIRACIONAL'
+  | 'ANALITICO_SOBRIO';
+
+export type ResolvedDerashaTone = Exclude<DerashaTone, 'AUTO'>;
+
 export interface MethodologyCandidateAnalysis {
   methodology: Exclude<DerashaMethodology, 'AUTO'>;
   relevanceScore: number; // 0 to 100
@@ -193,6 +206,8 @@ export interface MethodologyDeliberationResult {
   recommendedPrimary: Exclude<DerashaMethodology, 'AUTO'>;
   recommendedComplementaryFor10Min: Array<Exclude<DerashaMethodology, 'AUTO'>>;
   recommendedComplementaryFor30Min: Array<Exclude<DerashaMethodology, 'AUTO'>>;
+  recommendedTone?: ResolvedDerashaTone;
+  toneRationale?: string;
   deliberationSummary: string;
   candidates: MethodologyCandidateAnalysis[];
   deliberationTimeMs?: number;
@@ -261,6 +276,9 @@ export interface FinalDerasha {
   metodologiasComplementarias?: DerashaMethodology[];
   duracion?: DerashaDuration;
   audienciaOTono?: string;
+  tonoHomiletico?: DerashaTone;
+  resolvedTone?: ResolvedDerashaTone;
+  toneAdvisory?: string;
   methodologySections?: MethodologySectionItem[];
   theologicalKeys?: TheologicalKeys;
   morphologicalSynthesis: {
@@ -457,6 +475,7 @@ export interface ActiveStudySnapshot {
   duracion: DerashaDuration;
   metodologiasComplementarias: DerashaMethodology[];
   audienciaOTono: string;
+  tonoHomiletico?: DerashaTone;
   phase1Data: Phase1AnalysisResult;
   verifiedSources: VerifiedSefariaSource[];
   finalDerasha: FinalDerasha;

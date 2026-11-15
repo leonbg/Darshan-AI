@@ -9,6 +9,7 @@ import {
   SuggestedDerashaTopic,
   DerashaMethodology,
   DerashaDuration,
+  DerashaTone,
   MethodologyDeliberationResult,
   YouTubeVisualAnalysisResult,
   YouTubeVisualStyle,
@@ -239,6 +240,7 @@ export async function requestPhase1Analysis(
     metodologias_complementarias?: DerashaMethodology[];
     duracion?: DerashaDuration;
     audiencia_o_tono?: string;
+    tono_homiletico?: DerashaTone;
   }
 ): Promise<Phase1AnalysisResult> {
   const headers: Record<string, string> = {
@@ -259,6 +261,7 @@ export async function requestPhase1Analysis(
           metodologias_complementarias: options?.metodologias_complementarias || [],
           duracion: options?.duracion || '10_MIN',
           audiencia_o_tono: options?.audiencia_o_tono || 'Comunidad general · Inspirador y práctico',
+          ...(options?.tono_homiletico ? { tono_homiletico: options.tono_homiletico } : {}),
         }),
       },
       '/api/analyze-roots',
@@ -272,6 +275,7 @@ export async function requestPhase1Analysis(
         metodologia: options?.metodologia,
         metodologias_complementarias: options?.metodologias_complementarias,
         duracion: options?.duracion,
+        tono_homiletico: options?.tono_homiletico,
       })
     );
   }
@@ -284,6 +288,7 @@ export async function requestPhase3Derasha(payload: {
   metodologias_complementarias?: DerashaMethodology[];
   duracion?: DerashaDuration;
   audiencia_o_tono?: string;
+  tono_homiletico?: DerashaTone;
   title: string;
   primaryHebrew: string;
   transliteration: string;

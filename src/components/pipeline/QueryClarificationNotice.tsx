@@ -9,6 +9,7 @@ import {
   Cpu,
 } from 'lucide-react';
 import { evaluateMethodologyLogicGates } from '../../utils/methodologyLogicGates';
+import { distillTopicEssence } from '../../utils/topicEssence';
 
 export interface ClarificationState {
   mode: 'clarification_needed' | 'timeout_unavailable';
@@ -25,8 +26,8 @@ interface QueryClarificationNoticeProps {
 }
 
 export function buildRefinementsForQuery(rawQuery: string): string[] {
-  const cleaned = rawQuery.trim().replace(/[¿?¡!]+/g, '').trim();
-  const lower = cleaned.toLowerCase();
+  const cleaned = distillTopicEssence(rawQuery);
+  const lower = (rawQuery || '').trim().toLowerCase();
 
   // 1. Rosh Jódesh (1 o 2 días) & Halel
   if (

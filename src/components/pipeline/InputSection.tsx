@@ -31,6 +31,7 @@ import {
 import {
   DerashaMethodology,
   DerashaDuration,
+  DerashaTone,
   MethodologyDeliberationResult,
   ArchivedDerashaEntry,
   DerashaRelationType,
@@ -41,6 +42,13 @@ import {
   DERASHA_DURATION_OPTIONS,
   ResolvedMethodology,
 } from '../../utils/methodologyLogicGates';
+import {
+  AUDIENCE_BASE_PRESETS,
+  DERASHA_TONE_OPTIONS,
+  extractAudienceLabel,
+  getToneMeta,
+  resolveDerashaTone,
+} from '../../utils/toneAdvisor';
 import { parseCrossDerashaComparisonCommand } from '../../services/archiveService';
 import { extractYouTubeUrlFromText } from '../../services/api';
 
@@ -55,6 +63,8 @@ interface InputSectionProps {
   onChangeMetodologiasComplementarias: (val: DerashaMethodology[]) => void;
   audienciaOTono: string;
   onChangeAudienciaOTono: (val: string) => void;
+  tonoHomiletico?: DerashaTone;
+  onChangeTonoHomiletico?: (val: DerashaTone) => void;
   onSubmit: () => void;
   isLoading: boolean;
   isRtl: boolean;
@@ -188,6 +198,8 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
   onChangeMetodologiasComplementarias,
   audienciaOTono,
   onChangeAudienciaOTono,
+  tonoHomiletico = 'AUTO',
+  onChangeTonoHomiletico,
   onSubmit,
   isLoading,
   isRtl,
@@ -237,6 +249,30 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
     [query, metodologia, duracion, metodologiasComplementarias]
   );
   const gateEvaluation = pipelinePreview.evaluation;
+
+  const toneEvaluation = useMemo(
+    () =>
+      resolveDerashaTone(
+        tonoHomiletico,
+        query,
+        pipelinePreview.resolvedMethodology,
+        gateEvaluation.halakhicValidation
+      ),
+    [
+      tonoHomiletico,
+      query,
+      pipelinePreview.resolvedMethodology,
+      gateEvaluation.halakhicValidation,
+    ]
+  );
+  const activeToneMeta = useMemo(
+    () => getToneMeta(toneEvaluation.resolvedTone),
+    [toneEvaluation.resolvedTone]
+  );
+  const activeAudienceLabel = useMemo(
+    () => extractAudienceLabel(audienciaOTono),
+    [audienciaOTono]
+  );
 
   const detectedCrossComparison = useMemo(
     () => parseCrossDerashaComparisonCommand(query),
@@ -833,6 +869,24 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
               })}
             </div>
 
+            {/* Compact Tone Pill */}
+            <button
+              type="button"
+              onClick={handleToggleConfigFan}
+              title={toneEvaluation.advisoryReason}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-medium transition cursor-pointer ${activeToneMeta.badgeClass}`}
+            >
+              <Feather className="w-3 h-3 shrink-0" />
+              <span>
+                Tono:{' '}
+                <strong>
+                  {tonoHomiletico === 'AUTO'
+                    ? `Auto · ${activeToneMeta.shortLabel}`
+                    : activeToneMeta.shortLabel}
+                </strong>
+              </span>
+            </button>
+
             {isPrewarmedReady && !isLoading && (
               <span
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium"
@@ -1156,43 +1210,103 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
                   )}
                 </div>
 
-                {/* Audience & Tone */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-amber-400" />
-                      <span>3. Audiencia y Tono</span>
-                    </span>
-                    <span className="text-[11px] text-amber-300/90 truncate">
-                      {audienciaOTono}
-                    </span>
+                {/* Audience & Homiletic Tone */}
+                <div className="space-y-3 p-3.5 rounded-xl bg-[#090f1d]/90 border border-slate-800">
+                  {/* 3A. Audience */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-amber-400" />
+                        <span>3. Audiencia</span>
+                      </span>
+                      <span className="text-[11px] text-amber-300/90 truncate">
+                        {activeAudienceLabel}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {AUDIENCE_BASE_PRESETS.map((aud) => {
+                        const active = activeAudienceLabel === aud.id;
+                        return (
+                          <button
+                            key={aud.id}
+                            type="button"
+                            onClick={() => onChangeAudienciaOTono(aud.id)}
+                            disabled={isLoading}
+                            className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] border transition cursor-pointer ${
+                              active
+                                ? 'bg-amber-500/15 border-amber-400/50 text-amber-200 font-semibold'
+                                : 'bg-[#070c18] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="truncate">{aud.id}</div>
+                            <div className="text-[10px] text-slate-500 font-normal truncate">
+                              {aud.subtitle}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {AUDIENCE_PRESETS.map((preset) => {
-                      const active = audienciaOTono === preset;
-                      const [audTitle, audTone] = preset.split('·').map((s) => s.trim());
-                      return (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => onChangeAudienciaOTono(preset)}
-                          disabled={isLoading}
-                          className={`text-left px-2.5 py-2 rounded-xl text-[11px] border transition cursor-pointer ${
-                            active
-                              ? 'bg-amber-500/15 border-amber-400/50 text-amber-200 font-semibold'
-                              : 'bg-[#090f1d] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="truncate">{audTitle}</div>
-                          {audTone && (
-                            <div className="text-[10px] text-slate-500 font-normal truncate">
-                              {audTone}
+                  {/* 3B. Homiletic Tone */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                        <Feather className="w-3.5 h-3.5 text-sky-400" />
+                        <span>4. Tono de la Drashá</span>
+                      </span>
+                      <span className="text-[11px] text-sky-300 truncate">
+                        {tonoHomiletico === 'AUTO'
+                          ? `Sugerido: ${activeToneMeta.shortLabel}`
+                          : activeToneMeta.shortLabel}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {DERASHA_TONE_OPTIONS.map((toneOpt) => {
+                        const active = tonoHomiletico === toneOpt.id;
+                        return (
+                          <button
+                            key={toneOpt.id}
+                            type="button"
+                            onClick={() => onChangeTonoHomiletico?.(toneOpt.id)}
+                            disabled={isLoading}
+                            title={`${toneOpt.description} Ideal para: ${toneOpt.idealTopicsHint}`}
+                            className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] border transition cursor-pointer ${
+                              active
+                                ? 'bg-sky-500/15 border-sky-400/60 text-white font-semibold'
+                                : 'bg-[#070c18] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="truncate">{toneOpt.shortLabel}</span>
+                              <span className="font-hebrew text-[10px] text-slate-500 shrink-0" dir="rtl">
+                                {toneOpt.hebrewLabel}
+                              </span>
                             </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                            <div className="text-[10px] text-slate-500 font-normal truncate">
+                              {toneOpt.idealTopicsHint}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div
+                      className={`p-2 rounded-lg border text-[11px] leading-snug ${
+                        toneEvaluation.suitability === 'no_recomendado'
+                          ? 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+                          : 'bg-slate-950/80 border-slate-800/80 text-slate-300'
+                      }`}
+                    >
+                      <span className="font-semibold">
+                        {toneEvaluation.suitability === 'no_recomendado'
+                          ? 'Aviso de adecuación temática: '
+                          : 'Enfoque retórico: '}
+                      </span>
+                      {toneEvaluation.advisoryReason}
+                    </div>
                   </div>
                 </div>
 

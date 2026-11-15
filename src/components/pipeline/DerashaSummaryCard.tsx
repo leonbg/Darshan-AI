@@ -23,6 +23,7 @@ import {
   buildDerashaSummaryShareText,
   resolveDerashaExecutiveSummary,
 } from '../../utils/derashaSummary';
+import { getToneMeta } from '../../utils/toneAdvisor';
 
 interface DerashaSummaryCardProps {
   derasha: FinalDerasha;
@@ -62,6 +63,14 @@ export const DerashaSummaryCard: React.FC<DerashaSummaryCardProps> = React.memo(
       [derasha.duracion, phase1Data?.duracion]
     );
 
+    const activeToneMeta = useMemo(
+      () =>
+        derasha.resolvedTone || phase1Data?.resolvedTone
+          ? getToneMeta(derasha.resolvedTone || phase1Data?.resolvedTone)
+          : null,
+      [derasha.resolvedTone, phase1Data?.resolvedTone]
+    );
+
     const handleCopySummary = useCallback(async () => {
       const text = buildDerashaSummaryShareText(derasha, summary, phase1Data);
       try {
@@ -96,6 +105,14 @@ export const DerashaSummaryCard: React.FC<DerashaSummaryCardProps> = React.memo(
               <span className="text-amber-300/90 font-medium">
                 {durationLabel}
               </span>
+              {activeToneMeta && (
+                <>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-emerald-300/90 font-medium">
+                    {activeToneMeta.shortLabel}
+                  </span>
+                </>
+              )}
               <span className="text-slate-600">·</span>
               <span className="inline-flex items-center gap-1 text-slate-400 tabular-nums">
                 <Clock className="w-3.5 h-3.5 text-slate-500" />

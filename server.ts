@@ -12,6 +12,18 @@ import {
   validatePurelyHalakhicQuery,
   sanitizeHalakhicOutputFromExternalCitations,
 } from './src/utils/halakhicPipelineValidator.ts';
+import {
+  composeAudienceAndTone,
+  getToneMeta,
+  getToneRhetoricalDirectives,
+  normalizeDerashaTone,
+  resolveDerashaTone,
+} from './src/utils/toneAdvisor.ts';
+import {
+  distillTopicEssence,
+  sanitizeDerashaQuotedQuestions,
+} from './src/utils/topicEssence.ts';
+import { buildTopicGroundedExegeticAnalysis } from './src/utils/topicExegeticFallback.ts';
 
 dotenv.config();
 
@@ -346,18 +358,7 @@ function normalizeUserStudyQuery(rawQuery: string): {
   } else if (/modim|yotzer\s+bereshit/i.test(q)) {
     cleanTopicLabel = 'El Modim de-Rabanán y el Motivo Creacional (Yotzer Bereshit)';
   } else if (isUserQuestion) {
-    // Strip conversational question prefixes so the raw question is never treated as a quote title
-    const stripped = q
-      .replace(/^[¿¡\s]+|[?!\s]+$/g, '')
-      .replace(
-        /^(?:yo\s+)?(?:quer[ií]a|quisiera|me\s+gustar[ií]a)\s+(?:saber|preguntar|entender)\s+/i,
-        ''
-      )
-      .replace(/^(?:por\s+favor\s+)?(?:expl[ií]came|dime)\s+/i, '')
-      .trim();
-    const capitalized = stripped.charAt(0).toUpperCase() + stripped.slice(1);
-    cleanTopicLabel =
-      capitalized.length > 82 ? `${capitalized.slice(0, 79).trim()}…` : capitalized;
+    cleanTopicLabel = distillTopicEssence(q);
   }
 
   return {
@@ -2347,9 +2348,18 @@ function getDurationAndComplementaryInstructions(
 }
 
 // Helper: Methodology-specific instructions for the Rabbinic & Pedagogical Assistant
-function getMethodologyInstructions(metodologia: string, audienciaOTono: string): string {
+function getMethodologyInstructions(
+  metodologia: string,
+  audienciaOTono: string,
+  resolvedTone: 'MOTIVACION' | 'ADVERTENCIA_CAUTELA' | 'LLAMADO_ACCION' | 'ASPIRACIONAL' | 'ANALITICO_SOBRIO' = 'ASPIRACIONAL',
+  isSensitivePastoralContext = false
+): string {
   const m = (metodologia || 'PARDES').toUpperCase();
-  const toneNote = `PARÁMETRO "audiencia_o_tono": "${audienciaOTono || 'Comunidad general · Inspirador y práctico'}". Adapta rigurosamente el registro lingüístico, la densidad conceptual, las metáforas pedagógicas y el enfoque práctico a esta audiencia y tono.`;
+  const toneDirectives = getToneRhetoricalDirectives(resolvedTone, isSensitivePastoralContext);
+  const antiMetaRule = `REGLA CRÍTICA DE EJECUCIÓN EXEGÉTICA REAL (PROHIBICIÓN DE METADEFINICIONES):
+- JAMÁS dediques el cuerpo de una sección a definir qué significa teóricamente esa etapa o método (por ejemplo, NO escribas «El Pshat es el nivel literal...», «El Rémez es la alusión...», «Mahut significa la definición esencial según el Ramjal...», «El Punto Focal consiste en aislar...»). El lector ya conoce el método: quiere el ESTUDIO REAL de su tema.
+- En cada sección, entra DIRECTAMENTE a analizar la consulta concreta del usuario aplicando las herramientas de esa etapa y citando los términos hebreos (shorashim) y fuentes verificadas de Sefaria que te fueron entregadas.`;
+  const toneNote = `PARÁMETRO "audiencia_o_tono": "${audienciaOTono || 'Comunidad general · Inspirador y práctico'}". Adapta rigurosamente el registro lingüístico, la densidad conceptual, las metáforas pedagógicas y el enfoque práctico a esta audiencia.\n\n${antiMetaRule}\n\n${toneDirectives}`;
 
   if (m === 'WISSENSCHAFT_DES_JUDENTUMS' || m === 'FILOLOGIA_LITURGICA_WISSENSCHAFT') {
     return `${toneNote}
@@ -2462,6 +2472,13 @@ app.post('/api/decide-methodology', async (req, res) => {
     const fastPrimary = resolveEffectiveMethodology('AUTO', query);
     const fastComp30 = resolveComplementaryMethodologies(fastPrimary, query, '30_MIN');
     const fastComp10 = fastComp30.slice(0, 1);
+    const delibHalakha = validatePurelyHalakhicQuery(query);
+    const delibToneEval = resolveDerashaTone(
+      req.body?.tono_homiletico,
+      query,
+      fastPrimary as any,
+      delibHalakha
+    );
 
     const allSevenMethodologies = [
       'PARDES',
@@ -2518,7 +2535,9 @@ app.post('/api/decide-methodology', async (req, res) => {
       recommendedPrimary: fastPrimary,
       recommendedComplementaryFor10Min: fastComp10,
       recommendedComplementaryFor30Min: fastComp30,
-      deliberationSummary: `Compuerta lógica de alta precisión: se selecciona ${fastPrimary} como metodología estructural primaria, con ${fastComp30.join(' y ')} como aportes complementarios para estudios de 10 y 30 minutos.`,
+      recommendedTone: delibToneEval.recommendedTone,
+      toneRationale: delibToneEval.recommendationReason,
+      deliberationSummary: `Compuerta lógica de alta precisión: se selecciona ${fastPrimary} como metodología estructural primaria (con ${fastComp30.join(' y ')} como aportes complementarios) y tono sugerido «${getToneMeta(delibToneEval.recommendedTone).shortLabel}».`,
       candidates,
       deliberationTimeMs: Date.now() - startedAt,
     };
@@ -2535,8 +2554,8 @@ app.post('/api/decide-methodology', async (req, res) => {
 // Phase 1 + Phase 2 Combined Fast-Path: Morphological analysis, Sefaria canonical references & parallel server Sefaria prefetch
 app.post('/api/analyze-roots', async (req, res) => {
   const rawQuery = req.body.tema_o_fuente || req.body.query;
-  const audienciaOTono =
-    req.body.audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
+  const requestedTone = normalizeDerashaTone(req.body.tono_homiletico);
+  const rawAudience = req.body.audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
   const duracion = (req.body.duracion || '10_MIN').toUpperCase().trim();
 
   if (!rawQuery || typeof rawQuery !== 'string' || !rawQuery.trim()) {
@@ -2571,6 +2590,15 @@ app.post('/api/analyze-roots', async (req, res) => {
     duracion,
     req.body.metodologias_complementarias
   );
+  const p1ToneEval = resolveDerashaTone(
+    requestedTone,
+    query,
+    metodologia as any,
+    halakhicValidation
+  );
+  const audienciaOTono = req.body.tono_homiletico
+    ? composeAudienceAndTone(rawAudience, requestedTone, p1ToneEval.resolvedTone)
+    : rawAudience;
 
   const phase1StartedAt = Date.now();
   const phase1CacheKey = `${query.toLowerCase()}|${metodologia}`;
@@ -2584,6 +2612,9 @@ app.post('/api/analyze-roots', async (req, res) => {
           detectedMetodologia: metodologia,
           metodologiasComplementarias: complementaryMethodologies,
           duracion,
+          tonoHomiletico: p1ToneEval.requestedTone,
+          resolvedTone: p1ToneEval.resolvedTone,
+          toneAdvisory: p1ToneEval.advisoryReason,
           ...(externalThinkerDetection.detected ? { externalThinkerDetection } : {}),
           stageTimingsMs: {
             stage1MorphologyMs: 0,
@@ -2609,6 +2640,9 @@ app.post('/api/analyze-roots', async (req, res) => {
             detectedMetodologia: metodologia,
             metodologiasComplementarias: complementaryMethodologies,
             duracion,
+            tonoHomiletico: p1ToneEval.requestedTone,
+            resolvedTone: p1ToneEval.resolvedTone,
+            toneAdvisory: p1ToneEval.advisoryReason,
             ...(externalThinkerDetection.detected ? { externalThinkerDetection } : {}),
           },
           halakhicValidation
@@ -2843,6 +2877,9 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
     parsed.detectedMetodologia = metodologia;
     parsed.metodologiasComplementarias = complementaryMethodologies;
     parsed.duracion = duracion;
+    parsed.tonoHomiletico = p1ToneEval.requestedTone;
+    parsed.resolvedTone = p1ToneEval.resolvedTone;
+    parsed.toneAdvisory = p1ToneEval.advisoryReason;
 
     // Pipeline Module Override: When an external philosopher/thinker is detected, force the canonical Sefaria exegetical search
     if (externalThinkerDetection.detected) {
@@ -4330,6 +4367,7 @@ app.post('/api/generate-derasha', async (req, res) => {
       metodologias_complementarias,
       duracion: rawDuracion,
       audiencia_o_tono,
+      tono_homiletico,
       title,
       primaryHebrew,
       transliteration,
@@ -4369,14 +4407,28 @@ app.post('/api/generate-derasha', async (req, res) => {
       duracion,
       metodologias_complementarias
     );
-    const audienciaOTono =
-      audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
 
     if (!query || !morphologicalBreakdown || !verifiedSources) {
       return res.status(400).json({ error: 'Faltan datos requeridos (análisis morfológico o fuentes verificadas).' });
     }
 
-    const derashaCacheKey = `${query.toLowerCase()}|${metodologia}|${duracion}|${complementaryMethodologies.join(',')}|${audienciaOTono}`;
+    const halakhicValidation = validatePurelyHalakhicQuery(query);
+    const requestedTone = normalizeDerashaTone(tono_homiletico);
+    const toneEval = resolveDerashaTone(
+      requestedTone,
+      query,
+      metodologia as any,
+      halakhicValidation
+    );
+    const audienciaOTono = tono_homiletico
+      ? composeAudienceAndTone(
+          audiencia_o_tono || 'Comunidad general',
+          requestedTone,
+          toneEval.resolvedTone
+        )
+      : audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
+
+    const derashaCacheKey = `${query.toLowerCase()}|${metodologia}|${duracion}|${complementaryMethodologies.join(',')}|${audienciaOTono}|${toneEval.resolvedTone}`;
     const cachedDerasha = derashaMemoryCache.get(derashaCacheKey);
     if (cachedDerasha) {
       return res.json({
@@ -4390,7 +4442,6 @@ app.post('/api/generate-derasha', async (req, res) => {
       });
     }
 
-    const halakhicValidation = validatePurelyHalakhicQuery(query);
     const externalThinkerDetection = halakhicValidation.externalPhilosophyInjectionDisabled
       ? detectExternalThinkerAndForceExegeticalSearch('')
       : detectExternalThinkerAndForceExegeticalSearch(query);
@@ -4415,7 +4466,12 @@ app.post('/api/generate-derasha', async (req, res) => {
       : undefined;
 
     const ai = getGenAIClient();
-    const methodologyRules = getMethodologyInstructions(metodologia, audienciaOTono);
+    const methodologyRules = getMethodologyInstructions(
+      metodologia,
+      audienciaOTono,
+      toneEval.resolvedTone,
+      toneEval.isSensitivePastoralContext
+    );
     const durationAndComplementaryRules = getDurationAndComplementaryInstructions(
       metodologia,
       duracion,
@@ -4461,9 +4517,9 @@ REGLA DE ORO DE VERACIDAD Y USO DE FUENTES INTERNAS Y EXTERNAS:
 Tienes a tu disposición los TEXTOS REALES de las **Fuentes Internas de la Torá** (descargados de la API de Sefaria) y, cuando se trata de un estudio comparativo, las **Fuentes Externas Filosóficas y Clásicas** (Kant, Platón, Cicerón, Canon Pali sobre Iluminación/Nirvana, Eddas sobre Valhalla, Cristología Conciliar y la Disputa de Barcelona de 1263). Cita ambas con precisión para fundamentar el contraste exegético formal.
 
 SALIDA OBLIGATORIA:
-1. 'derashaTitle': Título inspirador, conceptual y claro de la drashá (NUNCA pegues la pregunta cruda del usuario como título).
-2. 'openingExordium': Apertura clara y directa que responda de frente las preguntas o el contraste exegético formal planteado por el usuario antes de adentrarse en las secciones.
-3. 'methodologySections': Arreglo estructurado con las secciones exactas de la metodología principal ("${metodologia}") MÁS las secciones de aporte de las metodologías complementarias (${JSON.stringify(complementaryMethodologies)}) cuando la duración es "10_MIN" (1 sección complementaria adicional) o "30_MIN" (2 secciones complementarias adicionales):
+1. 'derashaTitle': Título inspirador, conceptual y claro de la drashá que destile la esencia del tema (NUNCA pegues ni cites la pregunta cruda del usuario, ni la encierres entre comillas «...» o "...").
+2. 'openingExordium': Apertura clara y directa que destile la esencia del tema y responda de frente las cuestiones o el contraste planteado por el usuario SIN citar ni repetir textualmente la pregunta entre comillas.
+3. 'methodologySections': Arreglo estructurado con las secciones exactas de la metodología principal ("${metodologia}") MÁS las secciones de aporte de las metodologías complementarias (${JSON.stringify(complementaryMethodologies)}) cuando la duración es "10_MIN" (1 sección complementaria adicional) o "30_MIN" (2 secciones complementarias adicionales). En CADA sección ejecuta un estudio sustantivo y textual sobre el tema consultado (PROHIBIDO definir qué significa cada etapa del método en abstracto):
    - Si metodologia == "PARDES": 4 secciones base (1. Pshat, 2. Rémez, 3. Drash, 4. Sod).
    - Si metodologia == "WISSENSCHAFT_DES_JUDENTUMS" o "FILOLOGIA_LITURGICA_WISSENSCHAFT": 4 fases académicas de la Wissenschaft des Judentums.
    - Si metodologia == "EVOLUCION_CONCEPTUAL": 4 secciones base (1. En la Torá y Jazal; 2. En el Árbol de la Vida de la Cábala; 3. Según el Musar; 4. En la Jasidut y Evolución Comparada).
@@ -4476,8 +4532,10 @@ SALIDA OBLIGATORIA:
 5. 'executiveSummary': Resumen ejecutivo de lectura rápida (~60 segundos) con la tesis central ('headlineThesis'), síntesis narrativa clara de 2 a 4 oraciones ('abstractNarrative'), los 3 o 4 puntos clave de la drashá ('keyPillars') y la enseñanza práctica inmediata ('practicalTakeaway').`;
 
     const compactSources = compactVerifiedSourcesForPrompt(verifiedSources);
-    const effectiveTitle =
-      title && !title.startsWith('Estudio Exegético:') ? title : cleanTopicLabel;
+    const effectiveTitle = distillTopicEssence(
+      rawInput,
+      title && !title.startsWith('Estudio Exegético:') ? title : cleanTopicLabel
+    );
 
     const externalSourcesPromptBlock = halakhicValidation.externalPhilosophyInjectionDisabled
       ? halakhicValidation.systemPromptGuard
@@ -4539,12 +4597,12 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
 
     const phase3TimeoutMs =
       phase3ThinkingLevel === ThinkingLevel.XHIGH
-        ? 90000
+        ? 105000
         : phase3ThinkingLevel === ThinkingLevel.HIGH
-        ? 70000
+        ? 85000
         : phase3ThinkingLevel === ThinkingLevel.MEDIUM
-        ? 50000
-        : 35000;
+        ? 65000
+        : 45000;
 
     const response = await generateContentWithRetry(
       ai,
@@ -4592,7 +4650,7 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
                     },
                     exposition: {
                       type: Type.STRING,
-                      description: 'Desarrollo profundo, riguroso y pedagógico de esta sección respondiendo las preguntas del usuario',
+                      description: 'Ejecución directa del análisis sustantivo sobre el tema consultado usando las raíces hebreas y fuentes de Sefaria suministradas (NUNCA definas qué significa la etapa metodológica en abstracto ni cites la pregunta entre comillas)',
                     },
                     keyTakeaway: {
                       type: Type.STRING,
@@ -4709,6 +4767,9 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
     parsed.metodologiasComplementarias = complementaryMethodologies;
     parsed.duracion = duracion;
     parsed.audienciaOTono = audienciaOTono;
+    parsed.tonoHomiletico = toneEval.requestedTone;
+    parsed.resolvedTone = toneEval.resolvedTone;
+    parsed.toneAdvisory = toneEval.advisoryReason;
     if (activeExternalSources.length > 0) {
       parsed.externalSources = activeExternalSources;
     }
@@ -4723,6 +4784,13 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       parsed.methodologySections,
       parsed.pardes
     );
+
+    const sanitizedParsedQuestions = sanitizeDerashaQuotedQuestions(
+      parsed,
+      rawInput,
+      distillTopicEssence(rawInput, parsed.derashaTitle || effectiveTitle)
+    );
+    Object.assign(parsed, sanitizedParsedQuestions);
 
     if (!parsed.contemporaryMasters || !Array.isArray(parsed.contemporaryMasters.readings)) {
       parsed.contemporaryMasters = buildDefaultContemporaryMasters(
@@ -4803,9 +4871,13 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       cacheHit: false,
     };
 
-    const finalizedDerasha = sanitizeHalakhicOutputFromExternalCitations(
-      sanitizeStrictJewishObject(parsed),
-      halakhicValidation
+    const finalizedDerasha = sanitizeDerashaQuotedQuestions(
+      sanitizeHalakhicOutputFromExternalCitations(
+        sanitizeStrictJewishObject(parsed),
+        halakhicValidation
+      ),
+      rawInput,
+      parsed.derashaTitle || effectiveTitle
     );
     setBoundedCache(derashaMemoryCache, derashaCacheKey, finalizedDerasha);
     return res.json(finalizedDerasha);
@@ -4817,6 +4889,7 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       metodologias_complementarias,
       duracion: rawDuracion,
       audiencia_o_tono,
+      tono_homiletico,
       title,
       primaryHebrew,
       transliteration,
@@ -4846,8 +4919,10 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       isInternalHalakhaTopic,
       isComparativeTopic,
     } = normalizeUserStudyQuery(rawInput);
-    const effectiveTitle =
-      title && !title.startsWith('Estudio Exegético:') ? title : cleanTopicLabel;
+    const effectiveTitle = distillTopicEssence(
+      rawInput,
+      title && !title.startsWith('Estudio Exegético:') ? title : cleanTopicLabel
+    );
 
     const metodologia = resolveEffectiveMethodology(rawMetodologia || 'AUTO', query);
     const duracion = (rawDuracion || '10_MIN').toUpperCase().trim();
@@ -4857,10 +4932,23 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       duracion,
       metodologias_complementarias
     );
-    const audienciaOTono = audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
     const isModim = /\bmodim(?:\s+de[- ]?raban[aá]n|\s+anajnu)?\b/i.test(query);
 
     const fallbackHalakhicValidation = validatePurelyHalakhicQuery(query);
+    const fallbackRequestedTone = normalizeDerashaTone(tono_homiletico);
+    const fallbackToneEval = resolveDerashaTone(
+      fallbackRequestedTone,
+      query,
+      metodologia as any,
+      fallbackHalakhicValidation
+    );
+    const audienciaOTono = tono_homiletico
+      ? composeAudienceAndTone(
+          audiencia_o_tono || 'Comunidad general',
+          fallbackRequestedTone,
+          fallbackToneEval.resolvedTone
+        )
+      : audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
     const fallbackThinkerDetection = fallbackHalakhicValidation.externalPhilosophyInjectionDisabled
       ? detectExternalThinkerAndForceExegeticalSearch('')
       : detectExternalThinkerAndForceExegeticalSearch(query);
@@ -4883,6 +4971,35 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       : shouldIncludeComparativeContrast || fallbackExternalSources.length > 0
       ? buildDefaultFormalExegeticalContrast(query, fallbackExternalSources)
       : undefined;
+
+    const hasSpecializedFallback =
+      isJewishMovementsAndMessianicBoundaryTopic ||
+      isAfterlifeSoulDestinyTopic ||
+      isEnlightenmentBuddhismTopic ||
+      isPlatoCaveTopic ||
+      isCiceroTopic ||
+      isKantTopic ||
+      isMashiajBuddhaContrastTopic ||
+      isMashiajTopic ||
+      isModim ||
+      isHalelTopic ||
+      isShulchanArukhOrMinhagNusachTopic;
+
+    const groundedTopicFallback = buildTopicGroundedExegeticAnalysis({
+      query: rawInput,
+      effectiveTitle,
+      metodologia: metodologia as any,
+      complementaryMethodologies: complementaryMethodologies as any,
+      duracion: (duracion === '5_MIN' || duracion === '30_MIN' ? duracion : '10_MIN') as any,
+      primaryHebrew,
+      transliteration,
+      literalSpanishTranslation,
+      liturgicalContext,
+      morphologicalBreakdown,
+      theologicalKeys,
+      verifiedSources,
+      resolvedTone: fallbackToneEval.resolvedTone,
+    });
 
     const fallbackPardes = isJewishMovementsAndMessianicBoundaryTopic
       ? {
@@ -5293,50 +5410,19 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
               'Según el Arizal, los distintos Nusjaot y Minhaguim del pueblo judío son como las doce puertas de las Doce Tribus de Israel: caminos legítimos y sagrados que convergen en la unidad del Único Creador.',
           },
         }
-      : {
-          pshat: {
-            hebrewPillar: 'פְּשָׁט',
-            title: `Fundamento Bíblico y Conceptual: ${effectiveTitle}`,
-            exposition: `En el plano textual y filológico (Pshat), el análisis de este tema (${primaryHebrew || 'תּוֹרָה'}) parte de las fuentes directas del Tanaj y la tradición masorética, esclareciendo el significado preciso de sus términos hebreos y su marco normativo en la Torá.`,
-            keyTakeaway: 'Comprender con exactitud las raíces y conceptos de la Torá antes de elevar la interpretación.',
-          },
-          remez: {
-            hebrewPillar: 'רֶמֶז',
-            title: 'Alusiones Filológicas y Ecos en el Canon',
-            exposition: `Las raíces hebreas asociadas a esta enseñanza revelan conexiones intertextuales entre la Torá, los Profetas, la Mishná y la liturgia, iluminando la coherencia interna del pensamiento judío.`,
-            keyTakeaway: 'Cada raíz hebrea funciona como un puente hacia la sabiduría integral de la tradición.',
-          },
-          drash: {
-            hebrewPillar: 'דְּרָשׁ',
-            title: 'Exégesis Rabínica en el Talmud, Midrash y Rishonim',
-            exposition: `Los Sabios del Talmud, el Midrash y los comentaristas clásicos (Rashi, Rambam, Ramban y el Ramjal) desarrollan las implicaciones éticas, jurídicas y espirituales de esta cuestión para orientar la conducta humana y comunitaria.`,
-            keyTakeaway: 'El estudio auténtico responde a las preguntas del intelecto y conduce a la acción ética.',
-          },
-          sod: {
-            hebrewPillar: 'סוֹד',
-            title: 'Dimensión Interior y Propósito Espiritual',
-            exposition: `Desde la dimensión interior de la Torá (Cábala y Jasidut), cada enseñanza une la conciencia del ser humano con el propósito de santificar la realidad cotidiana (Dirá BeTajtonim).`,
-            keyTakeaway: 'Descubrir la dimensión espiritual y transformadora dentro de la vida diaria.',
-          },
-        };
+      : groundedTopicFallback.pardes;
 
-    const baseFallbackSections: any[] = normalizeMethodologySections(metodologia, [], fallbackPardes).map(
-      (s) => ({ ...s, sourceMethodology: metodologia })
-    );
-
-    complementaryMethodologies.forEach((compMethod, idx) => {
-      baseFallbackSections.push({
-        key: `comp_${compMethod.toLowerCase()}_${idx + 1}`,
-        stepNumber: baseFallbackSections.length + 1,
-        hebrewBadge: idx === 0 ? 'ה' : 'ו',
-        hebrewTerm: 'הַשְׁלָמָה מֵתוֹדוֹלוֹגִית',
-        spanishSubtitle: `Aporte Complementario · ${compMethod}`,
-        title: `Perspectiva Complementaria desde ${compMethod}`,
-        exposition: `${getComplementaryContributionBrief(compMethod)}. Al integrar esta lente en la lección de ${duracion === '30_MIN' ? '30 minutos' : '10 minutos'}, profundizamos tanto en el rigor de las fuentes clásicas como en la aplicación práctica para la vida personal y comunitaria.`,
-        keyTakeaway: `Integrar la lente de ${compMethod} amplía la profundidad exegética y práctica de la Drashá.`,
-        sourceMethodology: compMethod,
-      });
-    });
+    const baseFallbackSections: any[] = hasSpecializedFallback
+      ? [
+          ...normalizeMethodologySections(metodologia, [], fallbackPardes).map((s) => ({
+            ...s,
+            sourceMethodology: metodologia,
+          })),
+          ...groundedTopicFallback.methodologySections.filter(
+            (s) => s.sourceMethodology && s.sourceMethodology !== metodologia
+          ),
+        ]
+      : groundedTopicFallback.methodologySections;
 
     const fallbackDerasha: any = {
       metodologia,
@@ -5368,7 +5454,7 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
         ? 'Estudio halájico, calendárico y litúrgico sobre el Halel (Salmos 113–118) y Rosh Jódesh desde las fuentes internas del canon judío: su institución por los Profetas (Pesajim 117a), los dieciocho días de Halel Completo (Arjín 10a), el Medio Halel en Rosh Jódesh (Taanit 28b: «Minhag avoteijem be-yadeijem»), por qué Rosh Jódesh es de 1 día (cuando el mes que termina tiene 29 días, Jódesh Jaser) o de 2 días (cuando el mes que termina tiene 30 días, Jódesh Malé: el día 30 del mes saliente + el día 1 del mes entrante, según Rambam Hiljot Kidush HaJódesh 8:4 y Shulján Aruj Oraj Jaim 427:1), y la diferencia en el Shulján Aruj (Oraj Jaim 422:2) entre el Mejaber (Sefardí, sin berajá) y el Ramá (Ashkenazí, con berajá).'
         : isShulchanArukhOrMinhagNusachTopic
         ? 'Estudio halájico y comparativo interno sobre el Shulján Aruj (שֻׁלְחָן עָרוּךְ), el cumplimiento práctico de las leyes y los matices de Minhag (מִנְהָג) y Núsaj (נוּסַח) dentro del judaísmo: 1) Cómo dialogan en el Shulján Aruj la «Mesa» de Rabí Yosef Karo (El Mejaber · tradición Sefardí / Edot HaMizraj) y el «Mantel» (HaMapá) de Rabí Moshé Isserles (El Ramá · tradición Ashkenazí) a través de sus cuatro secciones (Oraj Jaim, Yoré Deá, Even HaEzer y Joshen Mishpat); 2) La distinción normativa entre Halajá (ley común), Minhag (costumbre comunitaria ancestral con fuerza vinculante: «Minhag Yisrael Torá hi», Pesajim 50b, Taanit 28b y Yoré Deá 214:1) y Núsaj (rito y formulación litúrgica en Oraj Jaim 68:1: Sefarad/Edot HaMizraj, Ashkenaz, Sefard/Ari Jasídico y Teimán); y 3) Los casos paradigmáticos de comparación de costumbres en el Shulján Aruj (la berajá del Medio Halel en OC 422:2, Birkat Kohanim en OC 128:44, Selijot en Elul en OC 581:1, Tefilín en Jol HaMoed en OC 31:2 y Kitniyot en Pésaj en OC 453:1).'
-        : `Abordamos de manera directa y estructurada los fundamentos de ${effectiveTitle} a través de la metodología ${metodologia}, respondiendo desde las fuentes clásicas del Tanaj, el Talmud y los grandes maestros de nuestra tradición.`,
+        : groundedTopicFallback.openingExordium,
       methodologySections: baseFallbackSections,
       morphologicalSynthesis: {
         summary: isAfterlifeSoulDestinyTopic
@@ -5381,63 +5467,79 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
           ? 'El análisis de los términos hebreos מְצֻוֶּה (Metzuvé, «comandado en relación», raíz צ-ו-ה afín a Tzavta = unión), וְחַי בָּהֶם (Ve-jay bahem, «vivirás por ellos», Yoma 85b) y הַיָּשָׁר וְהַטּוֹב (Ha-yashar ve-ha-tov, «lo recto y lo bueno» en cada contexto específico, Deuteronomio 6:18) demuestra cómo el lenguaje hebreo une la trascendencia de la fuente externa con la especificidad vital de cada decisión ética.'
           : isMashiajTopic
           ? 'El análisis de los términos hebreos מָשִׁיחַ (Mashíaj, «Ungido» de la raíz מ-שׁ-ח), גְּאֻלָּה (Gueulá, «Redención») y דֵּעָה (Deá, «Conocimiento de Hashem») demuestra que el mesianismo judío es terrenal, ético, histórico y estrictamente monoteísta.'
-          : `El análisis de las raíces hebreas de ${primaryHebrew || 'תּוֹרָה'} muestra la precisión con la que el lenguaje sagrado articula la ética, la liturgia y la espiritualidad judía.`,
-        keyTheologicalInsight:
-          theologicalKeys?.grammaticalDichotomy?.watchmakerRefutation ||
-          'La palabra hebrea vincula la esencia espiritual de la Creación con nuestra gratitud y responsabilidad moral cotidiana.',
+          : groundedTopicFallback.morphologicalSynthesis.summary,
+        keyTheologicalInsight: hasSpecializedFallback
+          ? theologicalKeys?.grammaticalDichotomy?.watchmakerRefutation ||
+            'La palabra hebrea vincula la esencia espiritual de la Creación con nuestra gratitud y responsabilidad moral cotidiana.'
+          : groundedTopicFallback.morphologicalSynthesis.keyTheologicalInsight,
       },
-      canonicalAnalysis: {
-        synthesis:
-          'Las fuentes internas de la Torá verificadas en la biblioteca canónica de Sefaria —en diálogo contrastivo con las fuentes externas consultadas— sostienen cada etapa de esta enseñanza.',
-        verifiedEchoes: (verifiedSources || []).map((s: any) => ({
-          ref: s.ref,
-          connection: s.rationale || 'Fuente canónica fundamental para el desarrollo exegético del tema.',
-        })),
-        spanishTranslations: (verifiedSources || [])
-          .filter((s: any) => Boolean(s.spanishTranslation))
-          .map((s: any) => ({
-            ref: s.ref,
-            spanishTranslation: s.spanishTranslation,
-          })),
-      },
+      canonicalAnalysis: hasSpecializedFallback
+        ? {
+            synthesis:
+              'Las fuentes internas de la Torá verificadas en la biblioteca canónica de Sefaria —en diálogo contrastivo con las fuentes externas consultadas— sostienen cada etapa de esta enseñanza.',
+            verifiedEchoes: (verifiedSources || []).map((s: any) => ({
+              ref: s.ref,
+              connection:
+                s.rationale ||
+                s.spanishTranslation ||
+                'Fuente canónica fundamental para el desarrollo exegético del tema.',
+            })),
+            spanishTranslations: (verifiedSources || [])
+              .filter((s: any) => Boolean(s.spanishTranslation))
+              .map((s: any) => ({
+                ref: s.ref,
+                spanishTranslation: s.spanishTranslation,
+              })),
+          }
+        : {
+            ...groundedTopicFallback.canonicalAnalysis,
+            spanishTranslations: (verifiedSources || [])
+              .filter((s: any) => Boolean(s.spanishTranslation))
+              .map((s: any) => ({
+                ref: s.ref,
+                spanishTranslation: s.spanishTranslation,
+              })),
+          },
       pardes: fallbackPardes,
-      practicalConclusion: {
-        title: 'Síntesis Conclusiva y Llamada a la Acción (Tikún Midot y Kavaná)',
-        hashkafa:
-          isAfterlifeSoulDestinyTopic ||
-          isEnlightenmentBuddhismTopic ||
-          isPlatoCaveTopic ||
-          isCiceroTopic ||
-          isKantTopic
-            ? 'Frente a la universalidad abstracta, la disolución del yo o el exclusivismo de las fuentes externas (Kant, Platón, Cicerón, Nirvana, Valhalla), la tradición judía establece una Teonomía Dialógica donde la luz infinita de la Torá y la vida eterna del Olam HaBá se encarnan en la universalidad ética de las 7 Leyes de Noé (Hiljot Teshuvá 3:5) y en la especificidad concreta de cada mandamiento (Ner Mitzvá ve-Torá Or, Proverbios 6:23; Pirké Avot 4:16-17).'
-            : isMashiajTopic
-            ? 'En el judaísmo, el Mashíaj es un líder 100% humano descendiente de David cuya misión es histórica y verificable: traer paz mundial (Isaías 2:4), reunir a los dispersos, reconstruir el Templo y llenar la tierra del conocimiento ético y espiritual del Creador (Isaías 11:9; Rambam Hiljot Melajim 11:4).'
-            : isModim
-            ? 'La disparidad entre el Modim de la Amidá y el Modim de-Rabanán revela que la gratitud judía abraza dos horizontes inseparables: la redención histórica comunitaria (Amidá) y la dependencia ontológica de cada ser vivo ante el Creador del cosmos («Yotzer Bereshit», Modim de-Rabanán).'
-            : 'Integrar la sabiduría de las fuentes en una visión coherente que honre tanto el rigor del estudio como la sensibilidad del corazón.',
-        prayerKavanah:
-          isAfterlifeSoulDestinyTopic ||
-          isEnlightenmentBuddhismTopic ||
-          isPlatoCaveTopic ||
-          isCiceroTopic ||
-          isKantTopic
-            ? 'Al recitar el Shemá y estudiar Torá, meditar en las palabras de Pirké Avot 4:16 y Proverbios 6:23: convertir cada mandamiento específico en una lámpara viva que ilumina este mundo y prepara el Olam HaBá.'
-            : isMashiajTopic
-            ? 'Al recitar en la Amidá «Et tzémaj David avdejá meherá tatzmíaj» y el «Aleinu leshabéaj», recordar que esperar la redención significa negarse a aceptar un mundo roto como definitivo.'
-            : isModim
-            ? 'Al inclinarnos en Modim, unir el reconocimiento del Creador del cosmos con la gratitud por la vida cotidiana.'
-            : `Al meditar en las palabras de «${effectiveTitle}», llevar la enseñanza de las fuentes del intelecto al corazón (Jeshbón HaNéfesh) con autenticidad y responsabilidad ética.`,
-        dailyAction:
-          isAfterlifeSoulDestinyTopic ||
-          isEnlightenmentBuddhismTopic ||
-          isPlatoCaveTopic ||
-          isCiceroTopic ||
-          isKantTopic
-            ? 'Ante una decisión ética esta semana, recuerda que una sola hora de Teshuvá y buenas acciones en este mundo supera todo el Olam HaBá (Pirké Avot 4:17): realiza una Mitzvá específica de bondad, justicia o Tzedaká que ilumine concretamente la vida de otra persona.'
-            : isMashiajTopic
-            ? 'Como enseña Maimónides (Hiljot Teshuvá 3:4), ver el mundo en equilibrio perfecto y realizar hoy un acto concreto de justicia, paz y bondad (Jésed) que acerque la redención.'
-            : `Aplicar hoy una enseñanza concreta derivada del estudio de «${effectiveTitle}» en nuestras relaciones interpersonales y en el refinamiento del carácter (Tikún HaMidot).`,
-      },
+      practicalConclusion: hasSpecializedFallback
+        ? {
+            title: 'Síntesis Conclusiva y Llamada a la Acción (Tikún Midot y Kavaná)',
+            hashkafa:
+              isAfterlifeSoulDestinyTopic ||
+              isEnlightenmentBuddhismTopic ||
+              isPlatoCaveTopic ||
+              isCiceroTopic ||
+              isKantTopic
+                ? 'Frente a la universalidad abstracta, la disolución del yo o el exclusivismo de las fuentes externas (Kant, Platón, Cicerón, Nirvana, Valhalla), la tradición judía establece una Teonomía Dialógica donde la luz infinita de la Torá y la vida eterna del Olam HaBá se encarnan en la universalidad ética de las 7 Leyes de Noé (Hiljot Teshuvá 3:5) y en la especificidad concreta de cada mandamiento (Ner Mitzvá ve-Torá Or, Proverbios 6:23; Pirké Avot 4:16-17).'
+                : isMashiajTopic
+                ? 'En el judaísmo, el Mashíaj es un líder 100% humano descendiente de David cuya misión es histórica y verificable: traer paz mundial (Isaías 2:4), reunir a los dispersos, reconstruir el Templo y llenar la tierra del conocimiento ético y espiritual del Creador (Isaías 11:9; Rambam Hiljot Melajim 11:4).'
+                : isModim
+                ? 'La disparidad entre el Modim de la Amidá y el Modim de-Rabanán revela que la gratitud judía abraza dos horizontes inseparables: la redención histórica comunitaria (Amidá) y la dependencia ontológica de cada ser vivo ante el Creador del cosmos («Yotzer Bereshit», Modim de-Rabanán).'
+                : groundedTopicFallback.practicalConclusion.hashkafa,
+            prayerKavanah:
+              isAfterlifeSoulDestinyTopic ||
+              isEnlightenmentBuddhismTopic ||
+              isPlatoCaveTopic ||
+              isCiceroTopic ||
+              isKantTopic
+                ? 'Al recitar el Shemá y estudiar Torá, meditar en las palabras de Pirké Avot 4:16 y Proverbios 6:23: convertir cada mandamiento específico en una lámpara viva que ilumina este mundo y prepara el Olam HaBá.'
+                : isMashiajTopic
+                ? 'Al recitar en la Amidá «Et tzémaj David avdejá meherá tatzmíaj» y el «Aleinu leshabéaj», recordar que esperar la redención significa negarse a aceptar un mundo roto como definitivo.'
+                : isModim
+                ? 'Al inclinarnos en Modim, unir el reconocimiento del Creador del cosmos con la gratitud por la vida cotidiana.'
+                : groundedTopicFallback.practicalConclusion.prayerKavanah,
+            dailyAction:
+              isAfterlifeSoulDestinyTopic ||
+              isEnlightenmentBuddhismTopic ||
+              isPlatoCaveTopic ||
+              isCiceroTopic ||
+              isKantTopic
+                ? 'Ante una decisión ética esta semana, recuerda que una sola hora de Teshuvá y buenas acciones en este mundo supera todo el Olam HaBá (Pirké Avot 4:17): realiza una Mitzvá específica de bondad, justicia o Tzedaká que ilumine concretamente la vida de otra persona.'
+                : isMashiajTopic
+                ? 'Como enseña Maimónides (Hiljot Teshuvá 3:4), ver el mundo en equilibrio perfecto y realizar hoy un acto concreto de justicia, paz y bondad (Jésed) que acerque la redención.'
+                : groundedTopicFallback.practicalConclusion.dailyAction,
+          }
+        : groundedTopicFallback.practicalConclusion,
       contemporaryMasters: buildDefaultContemporaryMasters(
         query,
         effectiveTitle,
@@ -5449,6 +5551,17 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
         : {}),
       fullStructuredDerashaMarkdown: '',
     };
+
+    fallbackDerasha.tonoHomiletico = fallbackToneEval.requestedTone;
+    fallbackDerasha.resolvedTone = fallbackToneEval.resolvedTone;
+    fallbackDerasha.toneAdvisory = fallbackToneEval.advisoryReason;
+
+    const sanitizedFallbackQuestions = sanitizeDerashaQuotedQuestions(
+      fallbackDerasha,
+      rawInput,
+      effectiveTitle
+    );
+    Object.assign(fallbackDerasha, sanitizedFallbackQuestions);
 
     fallbackDerasha.executiveSummary = normalizeOrBuildExecutiveSummary(
       fallbackDerasha,
@@ -5486,7 +5599,7 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       sanitizeStrictJewishObject(fallbackDerasha),
       fallbackHalakhicValidation
     );
-    const derashaCacheKey = `${query.toLowerCase()}|${metodologia}|${duracion}|${complementaryMethodologies.join(',')}|${audienciaOTono}`;
+    const derashaCacheKey = `${query.toLowerCase()}|${metodologia}|${duracion}|${complementaryMethodologies.join(',')}|${audienciaOTono}|${fallbackToneEval.resolvedTone}`;
     setBoundedCache(derashaMemoryCache, derashaCacheKey, sanitizedFallback);
     return res.json(sanitizedFallback);
   }

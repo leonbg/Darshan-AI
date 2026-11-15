@@ -1,6 +1,7 @@
 import {
   DerashaDuration,
   DerashaMethodology,
+  DerashaTone,
   FinalDerasha,
   Phase1AnalysisResult,
   VerifiedSefariaSource,
@@ -20,6 +21,7 @@ export async function executePhase3DerashaSynthesis(
     tema_o_fuente: params.effectiveQuery,
     metodologia: params.resolvedMethodology,
     audiencia_o_tono: params.audienciaOTono,
+    tono_homiletico: params.tonoHomiletico,
     duracion: params.duracion,
     metodologias_complementarias: params.complementaryMethodologies,
     title: params.phase1Data.title,
@@ -75,6 +77,7 @@ export async function executeDurationOrComplementaryResynthesis(params: {
   newDuration: DerashaDuration;
   extraMethodology?: DerashaMethodology;
   audienciaOTono: string;
+  tonoHomiletico?: DerashaTone;
   phase1Data: Phase1AnalysisResult;
   verifiedSources: VerifiedSefariaSource[];
 }): Promise<{
@@ -109,6 +112,7 @@ export async function executeDurationOrComplementaryResynthesis(params: {
     complementaryMethodologies: resolution.complementaryMethodologies,
     duracion: params.newDuration,
     audienciaOTono: params.audienciaOTono,
+    tonoHomiletico: params.tonoHomiletico,
     phase1Data: params.phase1Data,
     verifiedSources: params.verifiedSources,
   });
