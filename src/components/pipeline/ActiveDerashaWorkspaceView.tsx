@@ -7,6 +7,7 @@ import {
   BookOpen,
   ChevronUp,
   ChevronDown,
+  AlignLeft,
 } from 'lucide-react';
 import {
   DerashaDuration,
@@ -19,6 +20,7 @@ import {
 import { ExportScope } from '../layout/ExportModal';
 import { AtrilReadingScale } from '../../hooks/useAtrilPreferences';
 import { CompleteDerashaEssay } from './CompleteDerashaEssay';
+import { DerashaSummaryCard } from './DerashaSummaryCard';
 import { PardesView } from './PardesView';
 import { PracticalConclusionCard } from './PracticalConclusionCard';
 import { ExegesisFollowUp } from './ExegesisFollowUp';
@@ -83,10 +85,11 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
     onTranslateAllSources,
     onRequestMasterReadings,
   }) => {
-    const [viewMode, setViewMode] = useState<'essay' | 'cards'>('essay');
+    const [viewMode, setViewMode] = useState<'essay' | 'summary' | 'cards'>('essay');
     const [isDeepBreakdownOpen, setIsDeepBreakdownOpen] = useState(false);
 
     const handleSelectEssayView = useCallback(() => setViewMode('essay'), []);
+    const handleSelectSummaryView = useCallback(() => setViewMode('summary'), []);
     const handleSelectCardsView = useCallback(() => setViewMode('cards'), []);
     const handleToggleDeepBreakdown = useCallback(
       () => setIsDeepBreakdownOpen((prev) => !prev),
@@ -165,6 +168,18 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
               </button>
               <button
                 type="button"
+                onClick={handleSelectSummaryView}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-medium transition-all cursor-pointer whitespace-nowrap ${
+                  viewMode === 'summary'
+                    ? 'bg-sky-400 text-slate-950 font-semibold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <AlignLeft className="w-3.5 h-3.5" />
+                <span>Resumen</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleSelectCardsView}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-medium transition-all cursor-pointer whitespace-nowrap ${
                   viewMode === 'cards'
@@ -218,8 +233,8 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
           </button>
         </div>
 
-        {/* Vista A: Discurso Continuo de la Drashá */}
-        {viewMode !== 'cards' ? (
+        {/* Vista A: Discurso Continuo de la Drashá / Vista S: Resumen Ejecutivo / Vista B: Fichas */}
+        {viewMode === 'essay' ? (
           <section id="complete-essay-section">
             <CompleteDerashaEssay
               derasha={finalDerasha}
@@ -227,6 +242,7 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
               sources={verifiedSources}
               followUps={followUps}
               onOpenExport={handleOpenFullExport}
+              onSwitchToSummary={handleSelectSummaryView}
               onSwitchToCards={handleSelectCardsView}
               onAskFollowUpPrompt={handleAskFollowUpPrompt}
               onChangeDurationOrComplementary={onChangeDurationOrComplementary}
@@ -235,6 +251,17 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
               onTranslateAllSources={onTranslateAllSources}
               isTranslatingRef={translatingRef}
               isTranslatingAll={isTranslatingAll}
+            />
+          </section>
+        ) : viewMode === 'summary' ? (
+          <section id="derasha-summary-section">
+            <DerashaSummaryCard
+              derasha={finalDerasha}
+              phase1Data={phase1Data}
+              sources={verifiedSources}
+              onSwitchToEssay={handleSelectEssayView}
+              onSwitchToCards={handleSelectCardsView}
+              onOpenExport={handleOpenFullExport}
             />
           </section>
         ) : (

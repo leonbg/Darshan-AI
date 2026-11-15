@@ -16,7 +16,6 @@ import {
   YouTubeAspectRatio,
   YouTubeImageQualityTier,
   YouTubeGeneratedVideoClip,
-  YouTubeRitualTradition,
 } from '../types';
 import {
   buildClientMethodologyDeliberationFallback,
@@ -1006,7 +1005,6 @@ export async function requestAnalyzeYouTubeVisuals(payload: {
   visualStyle?: YouTubeVisualStyle;
   aspectRatio?: YouTubeAspectRatio;
   imageQuality?: YouTubeImageQualityTier;
-  traditionPreference?: YouTubeRitualTradition;
   customFocus?: string;
 }): Promise<YouTubeVisualAnalysisResult> {
   const headers: Record<string, string> = {
@@ -1032,7 +1030,6 @@ export async function requestRegenerateYouTubeIllustration(payload: {
   visualStyle: YouTubeVisualStyle;
   aspectRatio: YouTubeAspectRatio;
   imageQuality: YouTubeImageQualityTier;
-  traditionPreference?: YouTubeRitualTradition;
   title?: string;
 }): Promise<{ imageDataUrl: string; imageModelUsed: string }> {
   const headers: Record<string, string> = {
@@ -1058,7 +1055,6 @@ export async function requestGenerateYouTubeAnimation(payload: {
   aspectRatio: YouTubeAspectRatio;
   duration?: '6s' | '10s';
   resolution?: '720p' | '1080p';
-  traditionPreference?: YouTubeRitualTradition;
   referenceImages?: Array<{ mimeType: string; data: string }>;
 }): Promise<YouTubeGeneratedVideoClip> {
   const headers: Record<string, string> = {

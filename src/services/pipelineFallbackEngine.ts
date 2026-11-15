@@ -15,6 +15,7 @@ import {
   resolvePipelineMethodology,
 } from '../utils/methodologyLogicGates';
 import { detectExternalThinkerAndForceExegeticalSearch } from '../utils/externalThinkerDetector';
+import { resolveDerashaExecutiveSummary } from '../utils/derashaSummary';
 
 /**
  * Deterministic Client-Side Backup & Fallback Engine (v2.0).
@@ -867,6 +868,12 @@ export function buildClientPhase3DerashaFallback(params: {
       cacheHit: true,
     },
   };
+
+  rawDerasha.executiveSummary = resolveDerashaExecutiveSummary(
+    rawDerasha,
+    null,
+    params.verifiedSources || []
+  );
 
   return sanitizeHalakhicOutputFromExternalCitations(rawDerasha, halakhicValidation);
 }

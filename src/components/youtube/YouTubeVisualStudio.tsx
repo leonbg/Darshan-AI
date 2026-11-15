@@ -20,8 +20,6 @@ import {
   Wand2,
   Clapperboard,
   SlidersHorizontal,
-  ShieldAlert,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   YouTubeVisualAnalysisResult,
@@ -32,7 +30,6 @@ import {
   YouTubeAspectRatio,
   YouTubeImageQualityTier,
   YouTubeGeneratedVideoClip,
-  YouTubeRitualTradition,
 } from '../../types';
 import {
   requestAnalyzeYouTubeVisuals,
@@ -355,12 +352,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
     const [videoError, setVideoError] = useState<string | null>(null);
     const [generatedVideo, setGeneratedVideo] = useState<YouTubeGeneratedVideoClip | null>(null);
 
-    // Ritual Tradition Gate state (ask before showing close-up wrapping details)
-    const [selectedTradition, setSelectedTradition] = useState<YouTubeRitualTradition | null>(
-      null
-    );
-    const [isApplyingTradition, setIsApplyingTradition] = useState(false);
-
     const animStateRef = useRef({
       sceneIndex: 0,
       elapsedInScene: 0,
@@ -380,7 +371,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
         setGeneratedVideo(null);
         setVideoError(null);
         setAnimationStageView('canvas');
-        setSelectedTradition(null);
         try {
           const data = await requestAnalyzeYouTubeVisuals({
             youtubeUrl: targetUrl,
@@ -411,36 +401,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
         }
       },
       [youtubeUrl, outputMode, visualStyle, aspectRatio, imageQuality, customFocus]
-    );
-
-    const handleSelectTradition = useCallback(
-      async (tradId: YouTubeRitualTradition) => {
-        if (!result) return;
-        setSelectedTradition(tradId);
-        setIsApplyingTradition(true);
-        setErrorMessage(null);
-        setGeneratedVideo(null);
-        try {
-          const updated = await requestAnalyzeYouTubeVisuals({
-            youtubeUrl: result.canonicalUrl,
-            outputMode: result.outputMode,
-            visualStyle: result.visualStyle,
-            aspectRatio: result.aspectRatio,
-            imageQuality: result.imageQuality || imageQuality,
-            traditionPreference: tradId,
-            customFocus: customFocus.trim(),
-          });
-          setResult(updated);
-          setVideoPromptInput(updated.animationStoryboard?.videoPrompt || '');
-        } catch (err: any) {
-          setErrorMessage(
-            err?.message || 'No se pudo adaptar el close-up a la tradición seleccionada.'
-          );
-        } finally {
-          setIsApplyingTradition(false);
-        }
-      },
-      [result, imageQuality, customFocus]
     );
 
     useEffect(() => {
@@ -538,7 +498,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
             visualStyle: result.visualStyle,
             aspectRatio: result.aspectRatio,
             imageQuality: targetQuality,
-            traditionPreference: selectedTradition || result.selectedTradition,
             title: ill.title,
           });
           setResult((prev) => {
@@ -712,7 +671,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
           aspectRatio: result.aspectRatio,
           duration: videoDuration,
           resolution: videoResolution,
-          traditionPreference: selectedTradition || result.selectedTradition,
           referenceImages: refImages,
         });
         setGeneratedVideo(clip);
@@ -746,7 +704,7 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-400">
-              Analiza videos y tutoriales para comparar claridad pedagógica y generar ilustraciones IA, diagramas SVG y clips animados MP4 (Omni Flash).
+              Analiza shiurim y enseñanzas en YouTube para generar ilustraciones IA, diagramas SVG, secuencias animadas y desarrollar una Drashá sobre su contenido.
             </p>
           </div>
           <button
@@ -782,14 +740,14 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
 
             <div className="lg:col-span-5 space-y-1.5">
               <label htmlFor="yt-focus-input" className="block text-xs font-medium text-slate-300">
-                Enfoque o detalle visual (opcional)
+                Enfoque exegético o visual (opcional)
               </label>
               <input
                 id="yt-focus-input"
                 type="text"
                 value={customFocus}
                 onChange={(e) => setCustomFocus(e.target.value)}
-                placeholder="Ej. Evaluar claridad paso a paso y simbolismo"
+                placeholder="Ej. Destacar el simbolismo exegético y la síntesis ética"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-[#070c18] border border-slate-700/90 focus:border-sky-400 text-sm text-white placeholder-slate-500 focus:outline-none"
               />
             </div>
@@ -1001,7 +959,7 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
                   <div className="flex items-center gap-2">
                     <SlidersHorizontal className="w-4 h-4 text-sky-400 shrink-0" />
                     <h4 className="text-xs sm:text-sm font-bold text-white">
-                      Evaluación de Claridad del Tutorial: Video Continuo vs. Animación por Escenas
+                      Claridad Pedagógica de la Enseñanza: Video Continuo vs. Animación por Escenas
                     </h4>
                   </div>
                   <span className="text-xs font-semibold text-amber-300">
@@ -1033,75 +991,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
                       {result.pedagogicalComparison.videoStrengths}
                     </p>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Ritual Tradition Preference Gate BEFORE Close-Up */}
-            {result.traditionPreferenceGate?.requiresTraditionSelection && (
-              <div
-                className={`rounded-2xl border p-4 sm:p-5 space-y-3 ${
-                  selectedTradition
-                    ? 'bg-[#070c18] border-emerald-500/40'
-                    : 'bg-amber-950/20 border-amber-400/50'
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    {selectedTradition ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    ) : (
-                      <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                    )}
-                    <h4 className="text-xs sm:text-sm font-bold text-white">
-                      {selectedTradition
-                        ? `Tradición activa para el close-up: ${
-                            result.traditionPreferenceGate.traditions.find(
-                              (t) => t.id === selectedTradition
-                            )?.label
-                          }`
-                        : 'Antes de mostrar el close-up: ¿Qué tradición de amarre prefieres visualizar?'}
-                    </h4>
-                  </div>
-                  {isApplyingTradition && (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-amber-300">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Adaptando close-up...</span>
-                    </span>
-                  )}
-                </div>
-
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {result.traditionPreferenceGate.reasonEs}
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
-                  {result.traditionPreferenceGate.traditions.map((trad) => {
-                    const isActive = selectedTradition === trad.id;
-                    return (
-                      <button
-                        key={trad.id}
-                        type="button"
-                        disabled={isApplyingTradition}
-                        onClick={() => handleSelectTradition(trad.id)}
-                        className={`p-3 rounded-xl border text-left transition cursor-pointer disabled:opacity-60 space-y-1 ${
-                          isActive
-                            ? 'bg-emerald-500/15 border-emerald-400 text-white'
-                            : 'bg-[#090f1d] border-slate-800 hover:border-amber-400/50 text-slate-200'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold">{trad.label}</span>
-                          <span className="font-hebrew text-xs text-amber-300">
-                            {trad.hebrewLabel}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 leading-snug">
-                          {trad.wrappingDetailEs}
-                        </p>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             )}
@@ -1144,10 +1033,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
                   const activeLayer =
                     viewModeByCard[ill.id] || (ill.imageDataUrl ? 'raster' : 'svg');
                   const isRegenerating = regeneratingId === ill.id;
-                  const isCloseUpLocked =
-                    Boolean(result.traditionPreferenceGate?.requiresTraditionSelection) &&
-                    !selectedTradition &&
-                    ill.sceneNumber === result.traditionPreferenceGate?.closeUpSceneNumber;
 
                   return (
                     <article
@@ -1155,23 +1040,7 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
                       className="rounded-2xl bg-[#070c18] border border-slate-800 overflow-hidden flex flex-col justify-between"
                     >
                       <div className="relative bg-[#050814] border-b border-slate-800/80">
-                        {isCloseUpLocked ? (
-                          <div
-                            className={`w-full ${
-                              result.aspectRatio === '9:16'
-                                ? 'aspect-[9/16] max-h-80 mx-auto'
-                                : 'aspect-video'
-                            } flex flex-col items-center justify-center p-5 text-center gap-2 bg-[#070c18]`}
-                          >
-                            <ShieldAlert className="w-7 h-7 text-amber-400" />
-                            <div className="text-xs font-bold text-white">
-                              Close-up sujeto a tu tradición (Minhag)
-                            </div>
-                            <p className="text-[11px] text-slate-400 max-w-xs">
-                              Elige arriba Ashkenazí, Sefardí o Jabad / Ari para revelar el plano cerrado del amarre en la mano.
-                            </p>
-                          </div>
-                        ) : activeLayer === 'raster' && ill.imageDataUrl ? (
+                        {activeLayer === 'raster' && ill.imageDataUrl ? (
                           <img
                             src={ill.imageDataUrl}
                             alt={ill.title}
@@ -1576,12 +1445,7 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
 
                         <button
                           type="button"
-                          disabled={
-                            isGeneratingVideo ||
-                            !videoPromptInput.trim() ||
-                            (Boolean(result.traditionPreferenceGate?.requiresTraditionSelection) &&
-                              !selectedTradition)
-                          }
+                          disabled={isGeneratingVideo || !videoPromptInput.trim()}
                           onClick={handleGenerateAiVideoClip}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 text-xs font-bold transition cursor-pointer whitespace-nowrap"
                         >
@@ -1589,12 +1453,6 @@ export const YouTubeVisualStudio: React.FC<YouTubeVisualStudioProps> = React.mem
                             <>
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               <span>Renderizando MP4 (puede tardar ~1 min)...</span>
-                            </>
-                          ) : result.traditionPreferenceGate?.requiresTraditionSelection &&
-                            !selectedTradition ? (
-                            <>
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                              <span>Elige tu tradición arriba antes del video</span>
                             </>
                           ) : (
                             <>

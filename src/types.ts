@@ -238,10 +238,25 @@ export interface MasterReadingsSynthesis {
   readings: ContemporaryMasterReading[];
 }
 
+export interface DerashaExecutiveSummaryPillar {
+  label: string;
+  takeaway: string;
+}
+
+export interface DerashaExecutiveSummary {
+  headlineThesis: string;
+  abstractNarrative: string;
+  keyPillars: DerashaExecutiveSummaryPillar[];
+  coreSourcesDigest: string[];
+  practicalTakeaway: string;
+  estimatedReadingSec?: number;
+}
+
 export interface FinalDerasha {
   derashaTitle: string;
   openingExordium: string;
   fullStructuredDerashaMarkdown: string;
+  executiveSummary?: DerashaExecutiveSummary;
   metodologia?: DerashaMethodology;
   metodologiasComplementarias?: DerashaMethodology[];
   duracion?: DerashaDuration;
@@ -483,12 +498,6 @@ export type YouTubeAspectRatio = '16:9' | '9:16';
 
 export type YouTubeImageQualityTier = 'flash_lite' | 'nano_banana_2_1';
 
-export type YouTubeRitualTradition =
-  | 'ashkenazi'
-  | 'sefardi'
-  | 'chabad_ari'
-  | 'general_comparative';
-
 export type YouTubeMotionPattern =
   | 'radiant_rays'
   | 'orbiting_spheres'
@@ -569,18 +578,6 @@ export interface YouTubeVisualAnalysisResult {
     videoStrengths: string;
     animationStrengths: string;
   };
-  traditionPreferenceGate?: {
-    requiresTraditionSelection: boolean;
-    reasonEs: string;
-    closeUpSceneNumber: number;
-    traditions: Array<{
-      id: YouTubeRitualTradition;
-      label: string;
-      hebrewLabel: string;
-      wrappingDetailEs: string;
-    }>;
-  };
-  selectedTradition?: YouTubeRitualTradition;
   analyzedWithVideoStream: boolean;
 }
 

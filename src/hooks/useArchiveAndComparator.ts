@@ -34,7 +34,7 @@ import {
   googleSignIn,
   signOutFirebase,
   User,
-} from '../firebase';
+} from '../services/firebase';
 
 export interface PendingDriveConfirmation {
   type: 'DELETE' | 'OVERWRITE';

@@ -16,6 +16,7 @@ import {
   Download,
   Languages,
   ExternalLink,
+  AlignLeft,
 } from 'lucide-react';
 import {
   Phase1AnalysisResult,
@@ -44,6 +45,7 @@ interface CompleteDerashaEssayProps {
   sources: VerifiedSefariaSource[];
   followUps?: FollowUpItem[];
   onOpenExport: () => void;
+  onSwitchToSummary?: () => void;
   onSwitchToCards: () => void;
   onAskFollowUpPrompt?: (prompt: string) => void;
   onChangeDurationOrComplementary?: (
@@ -95,6 +97,7 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
   sources,
   followUps = [],
   onOpenExport,
+  onSwitchToSummary,
   onSwitchToCards,
   onAskFollowUpPrompt,
   onChangeDurationOrComplementary,
@@ -1149,6 +1152,16 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
         {/* Bottom Quick Action Bar */}
         <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
+            {onSwitchToSummary && (
+              <button
+                type="button"
+                onClick={onSwitchToSummary}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs font-medium text-sky-300 transition cursor-pointer"
+              >
+                <AlignLeft className="w-3.5 h-3.5 text-sky-400" />
+                <span>Ver Resumen Ejecutivo</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onSwitchToCards}

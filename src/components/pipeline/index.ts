@@ -7,6 +7,7 @@ export * from './CanonicalSourcesCard';
 export * from './PardesView';
 export * from './PracticalConclusionCard';
 export * from './CompleteDerashaEssay';
+export * from './DerashaSummaryCard';
 export * from './ContemporaryMastersCard';
 export * from './ExegesisFollowUp';
 export * from './ActiveDerashaWorkspaceView';

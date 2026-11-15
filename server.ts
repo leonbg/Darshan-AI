@@ -19,7 +19,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const cliPortIdx = process.argv.indexOf('--port');
+const cliPort =
+  cliPortIdx !== -1 && process.argv[cliPortIdx + 1]
+    ? parseInt(process.argv[cliPortIdx + 1], 10)
+    : NaN;
+const PORT = Number.isFinite(cliPort)
+  ? cliPort
+  : process.env.NODE_ENV === 'production' && process.env.PORT
+  ? parseInt(process.env.PORT, 10)
+  : 3000;
 
 app.use(express.json({ limit: '25mb' }));
 
@@ -4208,6 +4217,108 @@ function buildDefaultContemporaryMasters(
   };
 }
 
+function normalizeOrBuildExecutiveSummary(
+  derashaObj: any,
+  verifiedSources: any[] = [],
+  fallbackTitle = 'Estudio de Torá'
+) {
+  const clean = (s?: string) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '');
+  const firstSentence = (s?: string, maxLen = 220) => {
+    const t = clean(s);
+    if (!t) return '';
+    const m = t.match(/[^.!?]+[.!?]+/);
+    const sentence = m ? m[0].trim() : t;
+    return sentence.length > maxLen ? `${sentence.slice(0, maxLen - 1).trim()}…` : sentence;
+  };
+
+  const sourcesDigest: string[] = [];
+  const seenRefs = new Set<string>();
+  for (const s of verifiedSources || []) {
+    const ref = clean(s?.ref);
+    if (!ref || seenRefs.has(ref.toLowerCase())) continue;
+    seenRefs.add(ref.toLowerCase());
+    sourcesDigest.push(s?.heRef ? `${ref} (${clean(s.heRef)})` : ref);
+    if (sourcesDigest.length >= 6) break;
+  }
+  if (sourcesDigest.length === 0) {
+    for (const echo of derashaObj?.canonicalAnalysis?.verifiedEchoes || []) {
+      const ref = clean(echo?.ref);
+      if (!ref || seenRefs.has(ref.toLowerCase())) continue;
+      seenRefs.add(ref.toLowerCase());
+      sourcesDigest.push(ref);
+      if (sourcesDigest.length >= 6) break;
+    }
+  }
+
+  const raw = derashaObj?.executiveSummary || {};
+  const headlineThesis =
+    clean(raw.headlineThesis) ||
+    clean(derashaObj?.morphologicalSynthesis?.keyTheologicalInsight) ||
+    clean(derashaObj?.practicalConclusion?.hashkafa) ||
+    firstSentence(derashaObj?.openingExordium, 210) ||
+    clean(derashaObj?.derashaTitle) ||
+    clean(fallbackTitle);
+
+  const abstractNarrative =
+    clean(raw.abstractNarrative) ||
+    [
+      firstSentence(derashaObj?.openingExordium, 340),
+      firstSentence(derashaObj?.canonicalAnalysis?.synthesis, 220),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim() ||
+    'Síntesis estructurada a partir de las fuentes clásicas verificadas de la tradición judía.';
+
+  const rawPillars = Array.isArray(raw.keyPillars) ? raw.keyPillars : [];
+  const normalizedPillars = rawPillars
+    .map((p: any) => ({
+      label: clean(p?.label),
+      takeaway: clean(p?.takeaway),
+    }))
+    .filter((p: any) => p.label && p.takeaway)
+    .slice(0, 5);
+
+  const keyPillars =
+    normalizedPillars.length > 0
+      ? normalizedPillars
+      : (Array.isArray(derashaObj?.methodologySections) ? derashaObj.methodologySections : [])
+          .slice(0, 4)
+          .map((sec: any) => ({
+            label: clean(sec?.title || sec?.spanishSubtitle || 'Pilar Exegético'),
+            takeaway:
+              clean(sec?.keyTakeaway) || firstSentence(sec?.exposition, 200) || headlineThesis,
+          }))
+          .filter((p: any) => p.label && p.takeaway);
+
+  const practicalTakeaway =
+    clean(raw.practicalTakeaway) ||
+    clean(derashaObj?.practicalConclusion?.dailyAction) ||
+    clean(derashaObj?.practicalConclusion?.prayerKavanah) ||
+    clean(derashaObj?.practicalConclusion?.hashkafa) ||
+    'Aplicar esta enseñanza en la conducta ética y la intención espiritual diaria.';
+
+  const words = [
+    headlineThesis,
+    abstractNarrative,
+    ...keyPillars.map((p: any) => `${p.label} ${p.takeaway}`),
+    practicalTakeaway,
+  ]
+    .join(' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+  return {
+    headlineThesis,
+    abstractNarrative,
+    keyPillars,
+    coreSourcesDigest: sourcesDigest,
+    practicalTakeaway,
+    estimatedReadingSec: Math.max(25, Math.min(180, Math.round((words / 180) * 60))),
+  };
+}
+
 // Phase 3: Final structured Derashá generation with active Methodology, Duration (5_MIN, 10_MIN, 30_MIN) and Complementary Methodologies
 app.post('/api/generate-derasha', async (req, res) => {
   const phase3StartedAt = Date.now();
@@ -4361,7 +4472,8 @@ SALIDA OBLIGATORIA:
    - Si metodologia == "MUSAR_TRANSFORMATIVO": 3 secciones base de Rabí Israel Salanter (1. Punto Focal, 2. Diagnóstico del Néfesh, 3. Contabilidad del Alma / Jeshbón HaNéfesh).
    - Si metodologia == "FILOSOFIA_CONTRASTIVA": 4 secciones base (1. Eje I: Fuentes Internas de la Torá frente a Fuentes Externas, 2. Eje II: Universalidad frente a Especificidad del Mandamiento, 3. Respuesta desde las Fuentes Canónicas, 4. Síntesis Exegética y Elevación Práctica).
    - Si "metodologias_complementarias" no está vacío (${JSON.stringify(complementaryMethodologies)}): añade al final de 'methodologySections' una sección adicional por cada metodología complementaria (con 'sourceMethodology' igual al código de esa metodología complementaria y 'spanishSubtitle' como "Aporte Complementario · [Nombre de la Metodología]").
-4. 'practicalConclusion': Conclusión con llamada a la acción moral y espiritual clara, tangible y transformadora.`;
+4. 'practicalConclusion': Conclusión con llamada a la acción moral y espiritual clara, tangible y transformadora.
+5. 'executiveSummary': Resumen ejecutivo de lectura rápida (~60 segundos) con la tesis central ('headlineThesis'), síntesis narrativa clara de 2 a 4 oraciones ('abstractNarrative'), los 3 o 4 puntos clave de la drashá ('keyPillars') y la enseñanza práctica inmediata ('practicalTakeaway').`;
 
     const compactSources = compactVerifiedSourcesForPrompt(verifiedSources);
     const effectiveTitle =
@@ -4539,6 +4651,37 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
                 },
                 required: ['title', 'hashkafa', 'prayerKavanah', 'dailyAction'],
               },
+              executiveSummary: {
+                type: Type.OBJECT,
+                description: 'Resumen ejecutivo de la Drashá para lectura rápida de ~60 segundos',
+                properties: {
+                  headlineThesis: {
+                    type: Type.STRING,
+                    description: 'Tesis central de la drashá en una oración clara e incisiva',
+                  },
+                  abstractNarrative: {
+                    type: Type.STRING,
+                    description: 'Síntesis narrativa de 2 a 4 oraciones que resume el argumento completo y el contraste de fuentes',
+                  },
+                  keyPillars: {
+                    type: Type.ARRAY,
+                    description: 'De 3 a 4 ideas medulares correspondientes al hilo lógico de la drashá',
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        label: { type: Type.STRING, description: 'Nombre breve del punto clave o etapa' },
+                        takeaway: { type: Type.STRING, description: 'Idea esencial en 1 o 2 oraciones' },
+                      },
+                      required: ['label', 'takeaway'],
+                    },
+                  },
+                  practicalTakeaway: {
+                    type: Type.STRING,
+                    description: 'Enseñanza práctica inmediata y concreta para la vida cotidiana',
+                  },
+                },
+                required: ['headlineThesis', 'abstractNarrative', 'keyPillars', 'practicalTakeaway'],
+              },
             },
             required: [
               'derashaTitle',
@@ -4547,6 +4690,7 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
               'morphologicalSynthesis',
               'canonicalAnalysis',
               'practicalConclusion',
+              'executiveSummary',
             ],
           },
         },
@@ -4623,6 +4767,13 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
         },
       };
     }
+
+    // Ensure executiveSummary is always complete and enriched with verified source references
+    parsed.executiveSummary = normalizeOrBuildExecutiveSummary(
+      parsed,
+      verifiedSources,
+      parsed.derashaTitle || effectiveTitle
+    );
 
     // Assemble the complete, rich continuous Markdown essay from the structured sections without forcing the LLM to emit duplicate tokens
     if (!parsed.fullStructuredDerashaMarkdown || parsed.fullStructuredDerashaMarkdown.trim().length < 250) {
@@ -5298,6 +5449,12 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
         : {}),
       fullStructuredDerashaMarkdown: '',
     };
+
+    fallbackDerasha.executiveSummary = normalizeOrBuildExecutiveSummary(
+      fallbackDerasha,
+      verifiedSources,
+      effectiveTitle
+    );
 
     const mdFallStart = Date.now();
     fallbackDerasha.fullStructuredDerashaMarkdown = synthesizeContinuousDerashaMarkdown({
@@ -7044,6 +7201,7 @@ REGLAS ESTRICTAS:
 
 ENFOQUE SOLICITADO: ${relationType}
 HIPÓTESIS / OBSERVACIÓN DEL USUARIO: "${userHypothesis || `Analizar la relación, contradicción o complementariedad entre ${labelStr}`}"
+REQUISITO DE ESTRUCTURA: En "perDerashaCoreThesis" debes devolver EXACTAMENTE ${derashot.length} objetos, uno por cada Derashá analizada en el mismo orden (${comparedNumbers.map((n) => `#${n}`).join(', ')}).
 
 TEXTO Y METADATOS DE LAS DERASHOT SELECCIONADAS:
 ${derashotContextBlock}`;
@@ -7119,6 +7277,31 @@ ${derashotContextBlock}`;
       );
 
       const parsed = JSON.parse(response.text || '{}');
+      const rawPerDerasha = Array.isArray(parsed.perDerashaCoreThesis)
+        ? parsed.perDerashaCoreThesis
+        : [];
+      const normalizedPerDerasha = derashot.map((d: any, idx: number) => {
+        const seqNum = Number(d.sequenceNumber || idx + 1);
+        const matched =
+          rawPerDerasha.find((item: any) => Number(item?.sequenceNumber) === seqNum) ||
+          (rawPerDerasha.length === derashot.length ? rawPerDerasha[idx] : undefined);
+        return {
+          sequenceNumber: seqNum,
+          title: (matched?.title && String(matched.title).trim()) || d.title || `Derashá #${seqNum}`,
+          coreThesis:
+            (matched?.coreThesis && String(matched.coreThesis).trim()) ||
+            d.centralIdea ||
+            `Tesis central de la Derashá #${seqNum}`,
+          keySource:
+            (matched?.keySource && String(matched.keySource).trim()) ||
+            String(d.sourcesSummary || 'Fuentes clásicas').split('·')[0].trim(),
+          normativeOrPhilosophicalAngle:
+            (matched?.normativeOrPhilosophicalAngle &&
+              String(matched.normativeOrPhilosophicalAngle).trim()) ||
+            `Metodología ${d.methodology || 'PARDES'} aplicada al eje de «${d.title || `Derashá #${seqNum}`}».`,
+        };
+      });
+
       return res.json({
         id: `cmp-${comparedNumbers.join('-')}-${Date.now()}`,
         comparedNumbers,
@@ -7130,9 +7313,7 @@ ${derashotContextBlock}`;
           parsed.synthesisTitle ||
           `Síntesis Dialéctica: ${comparedNumbers.map((n) => `Derashá #${n}`).join(' × ')}`,
         executiveVerdict: parsed.executiveVerdict || '',
-        perDerashaCoreThesis: Array.isArray(parsed.perDerashaCoreThesis)
-          ? parsed.perDerashaCoreThesis
-          : [],
+        perDerashaCoreThesis: normalizedPerDerasha,
         pointsOfRelationship: parsed.pointsOfRelationship || '',
         pointsOfContradictionOrTension: parsed.pointsOfContradictionOrTension || '',
         pointsOfComplementarity: parsed.pointsOfComplementarity || '',
@@ -7529,49 +7710,6 @@ async function generateRasterIllustrationForScene(params: {
   }
 }
 
-const RITUAL_TRADITION_PROFILES: Record<
-  'ashkenazi' | 'sefardi' | 'chabad_ari' | 'general_comparative',
-  {
-    label: string;
-    hebrewLabel: string;
-    wrappingDetailEs: string;
-    visualDirectionEn: string;
-  }
-> = {
-  ashkenazi: {
-    label: 'Tradición Ashkenazí',
-    hebrewLabel: 'מִנְהַג אַשְׁכְּנַז',
-    wrappingDetailEs:
-      'Siete vueltas sobre el antebrazo hacia afuera (en sentido antihorario mirando el brazo izquierdo); en la palma y dedos se forma la letra Shin (ש) en el dorso de la mano y las vueltas en el dedo medio y anular completan Dalet (ד) y Yod (י).',
-    visualDirectionEn:
-      'Ashkenazi tefillin hand-wrapping close-up: seven forearm coils wrapped outward away from the body, forming the three-pronged Hebrew letter Shin across the back of the hand and wrapping three coils around the middle finger (two on the lower phalanx, one on the middle phalanx) to form Dalet and Yod.',
-  },
-  sefardi: {
-    label: 'Tradición Sefardí / Edot HaMizraj',
-    hebrewLabel: 'מִנְהַג סְפָרַד וְעֵדוֹת הַמִּזְרָח',
-    wrappingDetailEs:
-      'Siete vueltas sobre el antebrazo hacia adentro (hacia el cuerpo); al llegar a la mano, el paso diagonal sobre la palma y los anillos alrededor del dedo medio/anular siguen el orden clásico del Shulján Aruj y el Ben Ish Jai formando el Nombre Shaddai.',
-    visualDirectionEn:
-      'Sephardic / Edot HaMizrach tefillin hand-wrapping close-up: seven forearm coils wrapped inward toward the body, clear diagonal strap path across the palm without forming a raised Shin on the back of the hand in the same way, clean Sephardic finger-wrapping sequence around the middle and ring fingers.',
-  },
-  chabad_ari: {
-    label: 'Tradición Jabad / Ari (Núsaj Sefard)',
-    hebrewLabel: 'מִנְהַג חַבָּ״ד וְהָאֲרִ״י',
-    wrappingDetailEs:
-      'Siete vueltas hacia adentro formando la letra Shin sobre el antebrazo superior/muñeca y sobre la palma según el Alter Rebe (Shulján Aruj HaRav), cruzando primero hacia el dedo anular y rodeando el dedo medio con precisión cabalística.',
-    visualDirectionEn:
-      'Chabad / AriZal tefillin hand-wrapping close-up: seven forearm coils wrapped inward, distinct Shin formation on the upper palm/wrist per Shulchan Aruch HaRav, wrapping from the palm over to the ring finger and middle finger in the Chabad sequence.',
-  },
-  general_comparative: {
-    label: 'Comparativa Visual de Tradiciones',
-    hebrewLabel: 'הַשְׁוָאַת מִנְהָגִים',
-    wrappingDetailEs:
-      'Diagrama comparativo lado a lado mostrando la dirección de giro (hacia adentro vs hacia afuera) y las variantes del amarre en palma y dedos entre Ashkenazí, Sefardí y Jabad/Ari.',
-    visualDirectionEn:
-      'Side-by-side educational comparison diagram showing Ashkenazi vs Sephardic vs Chabad hand-wrapping close-up trajectories with subtle golden directional arrows.',
-  },
-};
-
 app.post('/api/analyze-youtube-visuals', async (req, res) => {
   try {
     const {
@@ -7580,7 +7718,6 @@ app.post('/api/analyze-youtube-visuals', async (req, res) => {
       visualStyle = 'editorial_iluminado',
       aspectRatio = '16:9',
       imageQuality = 'flash_lite',
-      traditionPreference,
       customFocus = '',
     } = req.body || {};
 
@@ -7607,13 +7744,8 @@ app.post('/api/analyze-youtube-visuals', async (req, res) => {
     const safeAspect: '16:9' | '9:16' = aspectRatio === '9:16' ? '9:16' : '16:9';
     const safeQuality: 'flash_lite' | 'nano_banana_2_1' =
       imageQuality === 'nano_banana_2_1' ? 'nano_banana_2_1' : 'flash_lite';
-    const safeTradition: 'ashkenazi' | 'sefardi' | 'chabad_ari' | 'general_comparative' | '' =
-      traditionPreference &&
-      ['ashkenazi', 'sefardi', 'chabad_ari', 'general_comparative'].includes(traditionPreference)
-        ? traditionPreference
-        : '';
 
-    const cacheKey = `${videoId}::${safeStyle}::${safeAspect}::${safeMode}::${safeQuality}::${safeTradition}::${String(customFocus).trim().toLowerCase()}`;
+    const cacheKey = `${videoId}::${safeStyle}::${safeAspect}::${safeMode}::${safeQuality}::${String(customFocus).trim().toLowerCase()}`;
     const cached = youtubeVisualCache.get(cacheKey);
     if (cached) {
       return res.json(cached);
@@ -7633,22 +7765,15 @@ app.post('/api/analyze-youtube-visuals', async (req, res) => {
         'Estética de geometría sagrada y Sefirot: círculos concéntricos, triángulos entrelazados, rayos de luz (Or Ein Sof), pilares de equilibrio y simetría mística.',
     };
 
-    const traditionInstructionBlock = safeTradition
-      ? `\n\nTRADICIÓN SELECCIONADA POR EL USUARIO PARA EL CLOSE-UP: **${RITUAL_TRADITION_PROFILES[safeTradition].label} (${RITUAL_TRADITION_PROFILES[safeTradition].hebrewLabel})**.\nDetalle obligatorio para la escena de close-up (tanto en 'visualConcept', 'imagePrompt', 'svgMarkup' y 'videoPrompt'):\n${RITUAL_TRADITION_PROFILES[safeTradition].wrappingDetailEs}\nEn inglés para 'imagePrompt' y 'videoPrompt': ${RITUAL_TRADITION_PROFILES[safeTradition].visualDirectionEn}`
-      : '';
-
     const systemInstruction = `Eres un director de arte visual, ilustrador editorial, especialista en pedagogía audiovisual y exégeta en **Darshán AI**.
-Tu tarea es analizar en profundidad el video de YouTube proporcionado y diseñar:
-1. Una síntesis conceptual precisa del video ('coreThesis', 'suggestedDerashaTopic', 'keyHebrewTerms').
-2. **Evaluación pedagógica de claridad ('pedagogicalComparison')**: analiza específicamente para este video/tutorial si el alumno o espectador logra mayor claridad mediante **animaciones paso a paso ('animacion_escenica')**, **video continuo ('video_continuo')** o un **enfoque híbrido ('hibrido')**, detallando las fortalezas concretas de cada formato ('clarityVerdict', 'videoStrengths', 'animationStrengths').
-3. **Detección de Variantes de Tradición / Minhag antes del Close-up ('traditionPreferenceGate')**:
-   - Evalúa si el video enseña un procedimiento ritual o halájico práctico con variaciones entre comunidades (por ejemplo: colocación de **Tefilín y amarre de la correa en brazo/mano/dedos**, nudos de **Tzitzit/Talit**, **Netilat Yadayim**, encendido de **Janukiá**, etc.).
-   - Si aplica (o si involucra amarre en la mano/Tefilín), marca \`requiresTraditionSelection: true\`, indica cuál escena corresponde al plano cerrado (\`closeUpSceneNumber\`, por ejemplo 2 o 3) y explica brevemente en \`reasonEs\` por qué conviene preguntar primero la costumbre comunitaria antes de mostrar el close-up.
-4. **3 Ilustraciones clave** ('illustrations') correspondientes a los momentos centrales del video:
+Tu tarea es analizar en profundidad el video de YouTube proporcionado (shiur, conferencia, estudio de Torá o análisis filosófico/exegético) y diseñar:
+1. Una síntesis conceptual precisa del video ('coreThesis', 'suggestedDerashaTopic', 'keyHebrewTerms') orientada al estudio exegético y al desarrollo de una Drashá.
+2. **Evaluación pedagógica de claridad ('pedagogicalComparison')**: analiza específicamente para esta enseñanza si el espectador comprende mejor las ideas mediante **animaciones paso a paso ('animacion_escenica')**, **video continuo ('video_continuo')** o un **enfoque híbrido ('hibrido')**, detallando las fortalezas concretas de cada formato ('clarityVerdict', 'videoStrengths', 'animationStrengths').
+3. **3 Ilustraciones clave** ('illustrations') correspondientes a los momentos centrales de la enseñanza:
    - Cada elemento debe incluir un 'imagePrompt' detallado en inglés (rich visual prompt describing scene, lighting, symbolism, composition, no watermark text) optimizado para generación de imagen por IA.
    - Además, incluye un 'svgMarkup' completo, válido y autocontenido (<svg xmlns="http://www.w3.org/2000/svg" viewBox="${svgViewBox}">...</svg>) con <defs>, gradientes y formas limpias (sin <script> ni atributos on*=).
    - Aplica fielmente el estilo visual solicitado: ${styleGuidanceMap[safeStyle]}.
-5. **Un Storyboard de Animación Escénica** ('animationStoryboard') con **4 escenas secuenciales** sincronizadas con los momentos del video, más un 'videoPrompt' cinematográfico en inglés para generar un clip animado coherente con el modelo de video Omni Flash, especificando para cada escena el patrón de movimiento ('radiant_rays', 'orbiting_spheres', 'scroll_unfold', 'ascending_sparks', o 'dialectic_bridge'), colores hexadecimales y elementos clave.${traditionInstructionBlock}
+4. **Un Storyboard de Animación Escénica** ('animationStoryboard') con **4 escenas secuenciales** sincronizadas con los argumentos del video, más un 'videoPrompt' cinematográfico en inglés para generar un clip animado coherente con el modelo de video Omni Flash, especificando para cada escena el patrón de movimiento ('radiant_rays', 'orbiting_spheres', 'scroll_unfold', 'ascending_sparks', o 'dialectic_bridge'), colores hexadecimales y elementos clave.
 
 Responde SIEMPRE en español claro y culto (salvo los campos 'imagePrompt' y 'videoPrompt', que van en inglés descriptivo para óptima fidelidad visual), respetando estrictamente el esquema JSON.`;
 
@@ -7659,7 +7784,6 @@ Responde SIEMPRE en español claro y culto (salvo los campos 'imagePrompt' y 'vi
 ${metadata.description ? `- Descripción:\n${metadata.description.slice(0, 1400)}` : ''}
 ${metadata.transcriptExcerpt ? `- Extracto de subtítulos / transcripción:\n${metadata.transcriptExcerpt.slice(0, 3200)}` : ''}
 ${customFocus ? `- Enfoque visual solicitado por el usuario: "${String(customFocus).trim()}"` : ''}
-${safeTradition ? `- Tradición seleccionada para el close-up: ${RITUAL_TRADITION_PROFILES[safeTradition].label}` : ''}
 
 Instrucciones de formato:
 - Modo solicitado: ${safeMode}
@@ -7683,15 +7807,6 @@ Instrucciones de formato:
             animationStrengths: { type: Type.STRING },
           },
           required: ['recommendedFormat', 'clarityVerdict', 'videoStrengths', 'animationStrengths'],
-        },
-        traditionPreferenceGate: {
-          type: Type.OBJECT,
-          properties: {
-            requiresTraditionSelection: { type: Type.BOOLEAN },
-            reasonEs: { type: Type.STRING },
-            closeUpSceneNumber: { type: Type.INTEGER },
-          },
-          required: ['requiresTraditionSelection', 'reasonEs', 'closeUpSceneNumber'],
         },
         keyHebrewTerms: {
           type: Type.ARRAY,
@@ -8015,30 +8130,6 @@ Instrucciones de formato:
     const recommendedFormat: 'animacion_escenica' | 'video_continuo' | 'hibrido' =
       recRaw === 'animacion_escenica' || recRaw === 'video_continuo' ? recRaw : 'hibrido';
 
-    const combinedTextForTraditionCheck = `${metadata.title} ${metadata.description || ''} ${
-      metadata.transcriptExcerpt || ''
-    } ${customFocus || ''}`;
-    const hasDeterministicRitualWrappingKeywords =
-      /\b(tefil[ií]n|tefillin|phylacteries|amarre|krijot|retzu[aá]|tzitzit|talit|tallit|netilat|shulj[aá]n|minhag)\b/i.test(
-        combinedTextForTraditionCheck
-      );
-    const requiresTraditionSelection =
-      Boolean(parsed?.traditionPreferenceGate?.requiresTraditionSelection) ||
-      hasDeterministicRitualWrappingKeywords;
-    const closeUpSceneNumber = Math.min(
-      Math.max(Number(parsed?.traditionPreferenceGate?.closeUpSceneNumber) || 2, 1),
-      normalizedIllustrations.length
-    );
-
-    const traditionOptions = (
-      ['ashkenazi', 'sefardi', 'chabad_ari', 'general_comparative'] as const
-    ).map((id) => ({
-      id,
-      label: RITUAL_TRADITION_PROFILES[id].label,
-      hebrewLabel: RITUAL_TRADITION_PROFILES[id].hebrewLabel,
-      wrappingDetailEs: RITUAL_TRADITION_PROFILES[id].wrappingDetailEs,
-    }));
-
     const resultPayload = {
       videoId,
       canonicalUrl,
@@ -8049,7 +8140,6 @@ Instrucciones de formato:
       aspectRatio: safeAspect,
       outputMode: safeMode,
       imageQuality: safeQuality,
-      selectedTradition: safeTradition || undefined,
       coreThesis:
         parsed?.coreThesis ||
         `Análisis visual y conceptual de «${metadata.title}» (${metadata.channelName}), transformando sus ideas centrales en escenas ilustradas y animadas.`,
@@ -8060,21 +8150,13 @@ Instrucciones de formato:
         recommendedFormat,
         clarityVerdict:
           parsed?.pedagogicalComparison?.clarityVerdict ||
-          'La máxima claridad didáctica se logra combinando animaciones por escenas (para pausar y desglosar cada concepto paso a paso) con un clip de video continuo para mostrar la transición fluida del argumento.',
+          'La máxima claridad expositiva se logra combinando animaciones por escenas (para desglosar cada argumento exegético paso a paso) con un clip de video continuo para acompañar la síntesis del mensaje.',
         videoStrengths:
           parsed?.pedagogicalComparison?.videoStrengths ||
-          'El video continuo destaca para transmitir ritmo narrativo, tono emocional y cohesión fluida sin cortes cognitivos.',
+          'El video continuo destaca para transmitir ritmo narrativo, tono retórico y cohesión fluida entre las ideas del shiur.',
         animationStrengths:
           parsed?.pedagogicalComparison?.animationStrengths ||
-          'Las animaciones segmentadas y diagramas reducen la sobrecarga visual, permiten controlar el ritmo por escena y fijan mejor la estructura lógica de un tutorial.',
-      },
-      traditionPreferenceGate: {
-        requiresTraditionSelection,
-        reasonEs:
-          parsed?.traditionPreferenceGate?.reasonEs ||
-          'El amarre en el antebrazo, la palma y los dedos varía según la costumbre comunitaria (Ashkenazí, Sefardí / Edot HaMizraj o Jabad / Ari). Selecciona tu tradición antes de visualizar el close-up.',
-        closeUpSceneNumber,
-        traditions: traditionOptions,
+          'Las animaciones segmentadas y diagramas reducen la sobrecarga visual, permiten contemplar cada fuente o concepto por separado y fijan mejor la estructura dialéctica de la enseñanza.',
       },
       keyHebrewTerms: Array.isArray(parsed?.keyHebrewTerms)
         ? parsed.keyHebrewTerms.slice(0, 5)
@@ -8116,7 +8198,6 @@ app.post('/api/generate-youtube-illustration', async (req, res) => {
       visualStyle = 'editorial_iluminado',
       aspectRatio = '16:9',
       imageQuality = 'nano_banana_2_1',
-      traditionPreference,
       title = '',
     } = req.body || {};
 
@@ -8131,18 +8212,10 @@ app.post('/api/generate-youtube-illustration', async (req, res) => {
     const safeAspect: '16:9' | '9:16' = aspectRatio === '9:16' ? '9:16' : '16:9';
     const safeQuality: 'flash_lite' | 'nano_banana_2_1' =
       imageQuality === 'flash_lite' ? 'flash_lite' : 'nano_banana_2_1';
-    const safeTradition =
-      traditionPreference && traditionPreference in RITUAL_TRADITION_PROFILES
-        ? (traditionPreference as keyof typeof RITUAL_TRADITION_PROFILES)
-        : null;
-
-    const traditionAddon = safeTradition
-      ? `\nFollow strictly: ${RITUAL_TRADITION_PROFILES[safeTradition].visualDirectionEn}`
-      : '';
 
     const generated = await generateRasterIllustrationForScene({
       ai,
-      prompt: `${String(prompt || `Educational illustration for "${title}"`).trim()}${traditionAddon}`,
+      prompt: String(prompt || `Educational illustration for "${title}"`).trim(),
       visualStyle: String(visualStyle),
       aspectRatio: safeAspect,
       qualityTier: safeQuality,
@@ -8170,7 +8243,6 @@ app.post('/api/generate-youtube-animation', async (req, res) => {
       aspectRatio = '16:9',
       duration = '6s',
       resolution = '720p',
-      traditionPreference,
       referenceImages = [],
     } = req.body || {};
 
@@ -8185,13 +8257,6 @@ app.post('/api/generate-youtube-animation', async (req, res) => {
     const safeAspect: '16:9' | '9:16' = aspectRatio === '9:16' ? '9:16' : '16:9';
     const safeDuration: '6s' | '10s' = duration === '10s' ? '10s' : '6s';
     const safeResolution: '720p' | '1080p' = resolution === '1080p' ? '1080p' : '720p';
-    const safeTradition =
-      traditionPreference && traditionPreference in RITUAL_TRADITION_PROFILES
-        ? (traditionPreference as keyof typeof RITUAL_TRADITION_PROFILES)
-        : null;
-    const traditionVideoSuffix = safeTradition
-      ? `\nClose-up ritual precision requirement: ${RITUAL_TRADITION_PROFILES[safeTradition].visualDirectionEn}`
-      : '';
 
     const validRefs = Array.isArray(referenceImages)
       ? referenceImages
@@ -8209,10 +8274,10 @@ app.post('/api/generate-youtube-animation', async (req, res) => {
             })),
             {
               type: 'text',
-              text: `${cleanPrompt}${traditionVideoSuffix}\nAnimate smoothly across the visual keyframes with clear pedagogical pacing, gentle camera motion, and cohesive editorial lighting.`,
+              text: `${cleanPrompt}\nAnimate smoothly across the visual keyframes with clear pedagogical pacing, gentle camera motion, and cohesive editorial lighting.`,
             },
           ]
-        : `${cleanPrompt}${traditionVideoSuffix}`;
+        : cleanPrompt;
 
     const ai = getGenAIClient();
     const interaction = await ai.interactions.create(

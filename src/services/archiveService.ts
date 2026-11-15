@@ -24,7 +24,7 @@ import {
   OperationType,
   getAccessToken,
   isFirestoreEnabled,
-} from '../firebase';
+} from './firebase';
 import { resolveApiUrl } from './api';
 import {
   createNewDerashaFileInGoogleDrive,
@@ -985,7 +985,9 @@ export function parseCrossDerashaComparisonCommand(rawText: string): {
   if (numbers.length < 2) return null;
 
   let relationType: DerashaRelationType = 'INTEGRAL';
-  if (/contradic|opone|opuest|tensi[óo]n|choca/i.test(lower)) {
+  if (/\bintegral(mente)?\b/i.test(lower)) {
+    relationType = 'INTEGRAL';
+  } else if (/contradic|opone|opuest|tensi[óo]n|choca/i.test(lower)) {
     relationType = 'CONTRADICCION';
   } else if (/complement|completa|integra|unen|suma/i.test(lower)) {
     relationType = 'COMPLEMENTO';

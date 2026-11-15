@@ -16,6 +16,7 @@ import {
   getDurationBadgeLabel,
   resolveLessonSectionsForExport,
 } from './methodologyCatalog';
+import { resolveDerashaExecutiveSummary } from './derashaSummary';
 
 export {
   type ExportScope,
@@ -276,6 +277,9 @@ export function buildEditableMarkdown(data: LessonExportData): string {
     derasha?.theologicalKeys || phase1?.theologicalKeys
   );
   const halakhicVal = derasha?.halakhicValidation || phase1?.halakhicValidation;
+  const executiveSummary = derasha
+    ? resolveDerashaExecutiveSummary(derasha, phase1, sources)
+    : null;
   const lines: string[] = [];
 
   lines.push(`# ${title}`);
@@ -296,6 +300,27 @@ export function buildEditableMarkdown(data: LessonExportData): string {
     lines.push(`> **Compuerta Metodológica:** ${phase1.logicGateReason}`);
   }
   lines.push('');
+
+  if (executiveSummary) {
+    lines.push('## Resumen Ejecutivo de la Drashá');
+    lines.push('');
+    lines.push(`**Tesis Central:** ${executiveSummary.headlineThesis}`);
+    lines.push('');
+    lines.push(executiveSummary.abstractNarrative);
+    if (executiveSummary.keyPillars.length > 0) {
+      lines.push('');
+      lines.push('### Puntos Clave');
+      executiveSummary.keyPillars.forEach((p, idx) => {
+        lines.push(`${idx + 1}. **${p.label}:** ${p.takeaway}`);
+      });
+    }
+    lines.push('');
+    lines.push(`* **Aplicación Práctica:** ${executiveSummary.practicalTakeaway}`);
+    if (executiveSummary.coreSourcesDigest.length > 0) {
+      lines.push(`* **Fuentes Clave:** ${executiveSummary.coreSourcesDigest.join(' · ')}`);
+    }
+    lines.push('');
+  }
 
   if (phase1?.primaryHebrew || phase1?.liturgicalContext) {
     lines.push('## 1. Pasuk Central y Contexto Litúrgico-Canónico');
@@ -635,6 +660,9 @@ export function generateOpenRtfBlob(data: LessonExportData): Blob {
     derasha?.theologicalKeys || phase1?.theologicalKeys
   );
   const halakhicVal = derasha?.halakhicValidation || phase1?.halakhicValidation;
+  const executiveSummary = derasha
+    ? resolveDerashaExecutiveSummary(derasha, phase1, sources)
+    : null;
 
   const rtf: string[] = [];
   rtf.push(
@@ -677,6 +705,34 @@ export function generateOpenRtfBlob(data: LessonExportData): Blob {
         )}\\i0\\par`
       );
     }
+  }
+
+  if (executiveSummary) {
+    rtf.push(
+      `\\pard\\sa100\\f0\\fs26\\cf2\\b ${toRtfUnicode('Resumen Ejecutivo de la Drashá')}\\b0\\par`
+    );
+    rtf.push(
+      `\\pard\\sa100\\f0\\fs22\\cf1\\b ${toRtfUnicode('Tesis Central: ')}\\b0 ${toRtfUnicode(
+        executiveSummary.headlineThesis
+      )}\\par`
+    );
+    rtf.push(
+      `\\pard\\sa120\\sl300\\slmult1\\f0\\fs22\\cf1 ${toRtfUnicode(
+        executiveSummary.abstractNarrative
+      )}\\par`
+    );
+    executiveSummary.keyPillars.forEach((p, idx) => {
+      rtf.push(
+        `\\pard\\sa60\\f0\\fs21\\cf1\\b ${toRtfUnicode(`${idx + 1}. ${p.label}: `)}\\b0 ${toRtfUnicode(
+          p.takeaway
+        )}\\par`
+      );
+    });
+    rtf.push(
+      `\\pard\\sa180\\f0\\fs21\\cf2\\b ${toRtfUnicode('Aplicación Práctica: ')}\\b0 ${toRtfUnicode(
+        executiveSummary.practicalTakeaway
+      )}\\par`
+    );
   }
 
   if (phase1?.primaryHebrew) {
@@ -1710,6 +1766,40 @@ export function buildLessonPrintableHtml(
 
     ${validatorAndContextHtml}
 
+    ${(() => {
+      const execSummary = derasha
+        ? resolveDerashaExecutiveSummary(derasha, phase1, sources)
+        : null;
+      if (!execSummary) return '';
+      return `
+      <div class="section-block" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:14px 18px;">
+        <div class="meta-kicker" style="margin-bottom:4px;">Resumen Ejecutivo de la Drashá</div>
+        <p class="body-p" style="font-weight:700;color:#0f172a;margin-bottom:6px;">
+          Tesis Central: ${escapeHtml(execSummary.headlineThesis)}
+        </p>
+        <p class="body-p" style="margin-bottom:8px;">
+          ${escapeHtml(execSummary.abstractNarrative)}
+        </p>
+        ${
+          execSummary.keyPillars.length > 0
+            ? `<ul style="margin:0 0 8px 18px;padding:0;font-size:11pt;color:#1e293b;">
+                ${execSummary.keyPillars
+                  .map(
+                    (p) =>
+                      `<li style="margin-bottom:4px;"><strong>${escapeHtml(p.label)}:</strong> ${escapeHtml(
+                        p.takeaway
+                      )}</li>`
+                  )
+                  .join('')}
+               </ul>`
+            : ''
+        }
+        <p class="body-p" style="margin-bottom:0;font-size:11pt;color:#0369a1;">
+          <strong>Aplicación Práctica:</strong> ${escapeHtml(execSummary.practicalTakeaway)}
+        </p>
+      </div>`;
+    })()}
+
     ${
       phase1?.primaryHebrew
         ? `<div class="pasuk-banner">
@@ -2258,6 +2348,47 @@ export async function generateLessonPdfBlob(data: LessonExportData): Promise<Blo
     }
     ctx.textAlign = 'left';
     y += boxH + 26;
+  }
+
+  // 3B. Executive Summary (Resumen Ejecutivo de la Drashá)
+  const pdfExecutiveSummary = derasha
+    ? resolveDerashaExecutiveSummary(derasha, phase1, sources)
+    : null;
+  if (pdfExecutiveSummary) {
+    drawMajorCardBanner(
+      'Visión Panorámica · Lectura Rápida',
+      'Resumen Ejecutivo de la Drashá',
+      '#0369a1',
+      '#f0f9ff'
+    );
+    drawTextBlock(`Tesis Central: ${pdfExecutiveSummary.headlineThesis}`, {
+      font: '700 22px "Cormorant Garamond", Georgia, serif',
+      color: '#0f172a',
+      lineHeight: 30,
+    });
+    y += 6;
+    drawTextBlock(pdfExecutiveSummary.abstractNarrative, {
+      font: '400 21px "Cormorant Garamond", Georgia, serif',
+      color: '#1e293b',
+      lineHeight: 29,
+    });
+    y += 8;
+    pdfExecutiveSummary.keyPillars.forEach((p, idx) => {
+      drawTextBlock(`${idx + 1}. ${p.label}: ${p.takeaway}`, {
+        font: '400 20px "Cormorant Garamond", Georgia, serif',
+        color: '#1e293b',
+        lineHeight: 27,
+        x: marginX + 12,
+        maxWidth: contentW - 18,
+      });
+      y += 4;
+    });
+    drawTextBlock(`Aplicación Práctica: ${pdfExecutiveSummary.practicalTakeaway}`, {
+      font: '700 20px "Cormorant Garamond", Georgia, serif',
+      color: '#0369a1',
+      lineHeight: 28,
+    });
+    y += 18;
   }
 
   // 4. Opening Exordium
