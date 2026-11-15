@@ -3,9 +3,11 @@ import {
   DerashaDuration,
   ExternalThinkerPipelineDetection,
   HalakhicPipelineValidation,
+  HalakhicShulchanArukhConsultation,
 } from '../types';
 import { detectExternalThinkerAndForceExegeticalSearch } from './externalThinkerDetector';
 import { validatePurelyHalakhicQuery } from './halakhicPipelineValidator';
+import { consultHalakhicShulchanArukhModule } from './halakhicShulchanArukhModule';
 
 export type ResolvedMethodology = Exclude<DerashaMethodology, 'AUTO'>;
 
@@ -73,6 +75,7 @@ export interface LogicGateEvaluation {
   isHistoricalConcept: boolean;
   externalThinkerDetection?: ExternalThinkerPipelineDetection;
   halakhicValidation?: HalakhicPipelineValidation;
+  halakhicConsultation?: HalakhicShulchanArukhConsultation;
 }
 
 interface GateRule {
@@ -389,6 +392,19 @@ function computeComplementaryList(
 export function evaluateMethodologyLogicGates(query: string): LogicGateEvaluation {
   const cleanQuery = (query || '').trim();
   const halakhicValidation = validatePurelyHalakhicQuery(cleanQuery);
+  const halakhicConsultation = consultHalakhicShulchanArukhModule(cleanQuery, halakhicValidation);
+  const result = evaluateMethodologyLogicGatesInternal(cleanQuery, halakhicValidation);
+  return {
+    ...result,
+    halakhicValidation,
+    ...(halakhicConsultation.active ? { halakhicConsultation } : {}),
+  };
+}
+
+function evaluateMethodologyLogicGatesInternal(
+  cleanQuery: string,
+  halakhicValidation: HalakhicPipelineValidation
+): LogicGateEvaluation {
 
   if (!cleanQuery) {
     return {
@@ -738,8 +754,14 @@ export function resolvePipelineMethodology(
     Boolean(evaluation.externalThinkerDetection?.detected) ||
     evaluation.gateId === 'GATE_3_PHILOSOPHICAL_CONTRAST';
 
+  const allowComparative =
+    !evaluation.halakhicValidation?.externalPhilosophyInjectionDisabled && isComparativeQuery;
+
   let primary: ResolvedMethodology;
-  if (evaluation.externalThinkerDetection?.detected) {
+  if (
+    evaluation.externalThinkerDetection?.detected &&
+    !evaluation.halakhicValidation?.externalPhilosophyInjectionDisabled
+  ) {
     // Hard Pipeline Override: Whenever an external thinker/philosopher (Kant, Platón, Cicerón, etc.) is detected,
     // force FILOSOFIA_CONTRASTIVA so the pipeline guarantees exegetical contrast and Universality vs. Specificity analysis.
     primary = 'FILOSOFIA_CONTRASTIVA';
@@ -751,12 +773,16 @@ export function resolvePipelineMethodology(
     requestedMethodology === 'FILOSOFIA_CONTRASTIVA' &&
     evaluation.halakhicValidation?.externalPhilosophyInjectionDisabled
   ) {
-    // Guard against sticky FILOSOFIA_CONTRASTIVA on purely Halakhic/liturgical topics (like Halel, Rosh Jódesh, Shulján Aruj):
+    // Guard against sticky FILOSOFIA_CONTRASTIVA on purely Halakhic/liturgical topics (Rezos, Festividades, Kashrut, Minhag):
     // fall back to the query's natural internal methodology (e.g. PARDES or WISSENSCHAFT_DES_JUDENTUMS).
-    primary = evaluation.enforcedMethodology;
+    primary =
+      evaluation.enforcedMethodology === 'FILOSOFIA_CONTRASTIVA'
+        ? 'PARDES'
+        : evaluation.enforcedMethodology;
   } else if (
     requestedMethodology === 'PARDES' &&
-    evaluation.gateId === 'GATE_3_PHILOSOPHICAL_CONTRAST'
+    evaluation.gateId === 'GATE_3_PHILOSOPHICAL_CONTRAST' &&
+    !evaluation.halakhicValidation?.externalPhilosophyInjectionDisabled
   ) {
     primary = 'FILOSOFIA_CONTRASTIVA';
   } else {
@@ -773,7 +799,7 @@ export function resolvePipelineMethodology(
     };
   }
 
-  // Filter valid user-selected complementary methodologies, excluding sticky FILOSOFIA_CONTRASTIVA when the query is not comparative
+  // Filter valid user-selected complementary methodologies, excluding sticky FILOSOFIA_CONTRASTIVA when the query is not comparative or is purely Halakhic
   const cleanedUserComp = (userComplementary || [])
     .filter(
       (m): m is ResolvedMethodology =>
@@ -781,7 +807,7 @@ export function resolvePipelineMethodology(
           m &&
             m !== 'AUTO' &&
             m !== primary &&
-            (isComparativeQuery || m !== 'FILOSOFIA_CONTRASTIVA')
+            (allowComparative || m !== 'FILOSOFIA_CONTRASTIVA')
         )
     )
     .map((m) => (m === 'FILOLOGIA_LITURGICA_WISSENSCHAFT' ? 'WISSENSCHAFT_DES_JUDENTUMS' : m));
@@ -791,7 +817,7 @@ export function resolvePipelineMethodology(
     ...evaluation.recommendedComplementary,
     'PARDES' as ResolvedMethodology,
     'MUSAR_TRANSFORMATIVO' as ResolvedMethodology,
-  ].filter((m) => m !== primary && (isComparativeQuery || m !== 'FILOSOFIA_CONTRASTIVA'));
+  ].filter((m) => m !== primary && (allowComparative || m !== 'FILOSOFIA_CONTRASTIVA'));
 
   const mergedComplementary = Array.from(new Set([...cleanedUserComp, ...autoPool])).slice(
     0,

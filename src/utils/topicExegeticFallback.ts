@@ -2,6 +2,7 @@ import {
   DerashaDuration,
   DerashaMethodology,
   FinalDerasha,
+  HalakhicShulchanArukhConsultation,
   MethodologySectionItem,
   PardesPillar,
   ResolvedDerashaTone,
@@ -23,6 +24,7 @@ export interface TopicExegeticFallbackInput {
   theologicalKeys?: any;
   verifiedSources?: VerifiedSefariaSource[];
   resolvedTone: ResolvedDerashaTone;
+  halakhicConsultation?: HalakhicShulchanArukhConsultation;
 }
 
 export interface TopicExegeticFallbackOutput {
@@ -243,14 +245,46 @@ export function buildTopicGroundedExegeticAnalysis(
 
   const toneClose = toneDirectiveClosing(input.resolvedTone, essence);
 
-  const rawExordium = [
-    `El estudio sobre ${essence} se ancla en el eje hebreo ${primaryHebrew} (${translit}: «${literalTrans}»).`,
-    parallelism.explanation ||
-      `Lejos de reducirse a una reflexión aislada, los textos primarios verificados —iniciando con ${cite0}— muestran que ${essence} compromete la integridad del intelecto, la sensibilidad del corazón y la conducta concreta.`,
-    toneClose,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const hasHalakhicModule = Boolean(
+    input.halakhicConsultation?.active &&
+      Array.isArray(input.halakhicConsultation.directQuotes) &&
+      input.halakhicConsultation.directQuotes.length > 0
+  );
+  const saQuotes = hasHalakhicModule ? input.halakhicConsultation!.directQuotes : [];
+  const saBranchLabel = hasHalakhicModule
+    ? input.halakhicConsultation!.consultedBranchLabels.join(' · ')
+    : '';
+  const saPrimaryQuote = saQuotes[0];
+  const saSecondaryQuote = saQuotes[1] || saQuotes[0];
+  const saDirectBlock = hasHalakhicModule
+    ? saQuotes
+        .map(
+          (q) =>
+            `${q.simanSeifLabel} («${q.briefHebrewQuote}» — ${q.briefSpanishQuote}${
+              q.mejaberAndRamaNote ? `; ${q.mejaberAndRamaNote}` : ''
+            })`
+        )
+        .join('; ')
+    : '';
+
+  const rawExordium = hasHalakhicModule
+    ? [
+        `El estudio halájico sobre ${essence} (${saBranchLabel}) se fundamenta directamente en el Shulján Aruj, sin incorporar filosofía externa ni comparativa, anclado en ${primaryHebrew} (${translit}: «${literalTrans}»).`,
+        `Desde el corpus jurídico interno, ${saPrimaryQuote.simanSeifLabel} establece: «${saPrimaryQuote.briefHebrewQuote}» (${saPrimaryQuote.briefSpanishQuote})${
+          saPrimaryQuote.mejaberAndRamaNote ? `. ${saPrimaryQuote.mejaberAndRamaNote}` : ''
+        }.`,
+        toneClose,
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : [
+        `El estudio sobre ${essence} se ancla en el eje hebreo ${primaryHebrew} (${translit}: «${literalTrans}»).`,
+        parallelism.explanation ||
+          `Lejos de reducirse a una reflexión aislada, los textos primarios verificados —iniciando con ${cite0}— muestran que ${essence} compromete la integridad del intelecto, la sensibilidad del corazón y la conducta concreta.`,
+        toneClose,
+      ]
+        .filter(Boolean)
+        .join(' ');
 
   const methodologySections: MethodologySectionItem[] = [];
   const m = input.metodologia;
@@ -568,10 +602,38 @@ export function buildTopicGroundedExegeticAnalysis(
     );
   }
 
+  // If the Halakhic Shulchan Arukh module is active, enrich section 1 & 2 with direct Shulchan Arukh quotes
+  if (hasHalakhicModule && methodologySections.length > 0) {
+    methodologySections[0] = {
+      ...methodologySections[0],
+      exposition: `${methodologySections[0].exposition} Cita directa del Shulján Aruj (${saPrimaryQuote.simanSeifLabel}): «${saPrimaryQuote.briefHebrewQuote}» — ${saPrimaryQuote.briefSpanishQuote}.${
+        saPrimaryQuote.mejaberAndRamaNote ? ` (${saPrimaryQuote.mejaberAndRamaNote})` : ''
+      }`,
+      keyTakeaway: `${saPrimaryQuote.simanSeifLabel}: ${saPrimaryQuote.briefSpanishQuote}`,
+    };
+    if (methodologySections[1] && saSecondaryQuote) {
+      methodologySections[1] = {
+        ...methodologySections[1],
+        exposition: `${methodologySections[1].exposition} Referencias directas consultadas en el Shulján Aruj para ${saBranchLabel}: ${saDirectBlock}.`,
+        keyTakeaway: `${saSecondaryQuote.simanSeifLabel} (${saSecondaryQuote.topicLabel}) fija la pauta halájica práctica dentro de las fuentes internas.`,
+      };
+    }
+  }
+
   const maxComps =
     input.duracion === '5_MIN' ? 0 : input.duracion === '30_MIN' ? 2 : 1;
+  const omitExternal = Boolean(
+    input.halakhicConsultation?.externalPhilosophyOmitted ||
+      input.halakhicConsultation?.active
+  );
   const compsToInclude = (input.complementaryMethodologies || [])
-    .filter((cm) => cm && cm !== 'AUTO' && cm !== m)
+    .filter(
+      (cm) =>
+        cm &&
+        cm !== 'AUTO' &&
+        cm !== m &&
+        (!omitExternal || cm !== 'FILOSOFIA_CONTRASTIVA')
+    )
     .slice(0, maxComps);
 
   compsToInclude.forEach((compMethod) => {
@@ -689,9 +751,21 @@ export function buildTopicGroundedExegeticAnalysis(
     },
     practicalConclusion: {
       title: sanitizeQuotedQuestionInString(practicalConclusionTitle, input.query, essence),
-      hashkafa: `El estudio integral de ${essence} demuestra que la sabiduría de la Torá no separa la intimidad de la conciencia del compromiso histórico: cada convicción ética madura al encarnarse en actos concretos.`,
-      prayerKavanah: `Al meditar en ${primaryHebrew} («${literalTrans}»), unir el entendimiento del texto con una intención sincera del corazón para vivir ${essence} con integridad constante.`,
-      dailyAction: sanitizeQuotedQuestionInString(dailyAction, input.query, essence),
+      hashkafa: hasHalakhicModule
+        ? `Desde el corpus halájico interno (${saBranchLabel}), la normativa del Shulján Aruj (${saQuotes
+            .map((q) => q.simanSeifLabel)
+            .join(', ')}) santifica la vida cotidiana mediante el cumplimiento fiel del Talmud, el Mejaber y el Ramá, prescindiendo de todo marco filosófico externo.`
+        : `El estudio integral de ${essence} demuestra que la sabiduría de la Torá no separa la intimidad de la conciencia del compromiso histórico: cada convicción ética madura al encarnarse en actos concretos.`,
+      prayerKavanah: hasHalakhicModule
+        ? `Al aplicar ${saPrimaryQuote.simanSeifLabel} («${saPrimaryQuote.briefHebrewQuote}» — ${saPrimaryQuote.briefSpanishQuote}), unir la precisión normativa (Halajá le-Maasé) con la reverencia interior del corazón.`
+        : `Al meditar en ${primaryHebrew} («${literalTrans}»), unir el entendimiento del texto con una intención sincera del corazón para vivir ${essence} con integridad constante.`,
+      dailyAction: sanitizeQuotedQuestionInString(
+        hasHalakhicModule
+          ? `Revisar hoy en el Shulján Aruj la cita directa de ${saPrimaryQuote.simanSeifLabel} (${saPrimaryQuote.topicLabel}) y aplicar su pauta práctica conforme al Minhag y Núsaj de tu comunidad.`
+          : dailyAction,
+        input.query,
+        essence
+      ),
     },
   };
 }

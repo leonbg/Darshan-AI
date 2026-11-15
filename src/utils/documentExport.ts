@@ -494,7 +494,40 @@ export function buildEditableMarkdown(data: LessonExportData): string {
     }
   }
 
-  const suppressExternal = Boolean(halakhicVal?.externalPhilosophyInjectionDisabled);
+  const halakhicConsultation =
+    derasha?.halakhicConsultation || phase1?.halakhicConsultation;
+  if (
+    halakhicConsultation?.active &&
+    halakhicConsultation.directQuotes.length > 0
+  ) {
+    lines.push(
+      `## 8. Módulo Halájico · Citas Breves y Directas del Shulján Aruj (${halakhicConsultation.consultedBranchLabels.join(
+        ' · '
+      )})`
+    );
+    lines.push('');
+    lines.push(
+      '> **Política Exegética:** Filosofía externa y comparativa omitida estrictamente en temas de Halajá.'
+    );
+    lines.push('');
+    halakhicConsultation.directQuotes.forEach((q, idx) => {
+      lines.push(
+        `### ${idx + 1}. ${q.simanSeifLabel} — ${q.topicLabel} (${q.focusBranchLabel})`
+      );
+      lines.push(`* **Hebreo:** ${q.briefHebrewQuote}`);
+      lines.push(`* **Traducción Directa:** «${q.briefSpanishQuote}»`);
+      if (q.mejaberAndRamaNote) {
+        lines.push(`* **Mejaber / Ramá:** ${q.mejaberAndRamaNote}`);
+      }
+      lines.push(`* **Sefaria:** ${q.sefariaUrl}`);
+      lines.push('');
+    });
+  }
+
+  const suppressExternal = Boolean(
+    halakhicVal?.externalPhilosophyInjectionDisabled ||
+      halakhicConsultation?.externalPhilosophyOmitted
+  );
   const externalSources = !suppressExternal
     ? derasha?.externalSources?.length
       ? derasha.externalSources
@@ -932,6 +965,48 @@ export function generateOpenRtfBlob(data: LessonExportData): Blob {
     });
   }
 
+  const rtfHalakhicConsultation =
+    derasha?.halakhicConsultation || phase1?.halakhicConsultation;
+  if (
+    rtfHalakhicConsultation?.active &&
+    rtfHalakhicConsultation.directQuotes.length > 0
+  ) {
+    rtf.push(
+      `\\pard\\sa140\\f0\\fs26\\cf2\\b ${toRtfUnicode(
+        `Módulo Halájico · Citas Directas del Shulján Aruj (${rtfHalakhicConsultation.consultedBranchLabels.join(
+          ' · '
+        )})`
+      )}\\b0\\par`
+    );
+    rtf.push(
+      `\\pard\\sa100\\f0\\fs19\\cf3\\i ${toRtfUnicode(
+        'Filosofía externa o comparativa omitida estrictamente en temas de Halajá.'
+      )}\\i0\\par`
+    );
+    rtfHalakhicConsultation.directQuotes.forEach((q, idx) => {
+      rtf.push(
+        `\\pard\\sa60\\f1\\fs20\\cf2\\b ${toRtfUnicode(
+          `${idx + 1}. ${q.simanSeifLabel} — ${q.topicLabel} [${q.focusBranchLabel}]`
+        )}\\b0\\par`
+      );
+      rtf.push(
+        `\\pard\\sa60\\f2\\fs22\\cf1 ${toRtfUnicode(q.briefHebrewQuote)}\\par`
+      );
+      rtf.push(
+        `\\pard\\sa80\\f0\\fs20\\cf1 ${toRtfUnicode(
+          `«${q.briefSpanishQuote}»`
+        )}\\par`
+      );
+      if (q.mejaberAndRamaNote) {
+        rtf.push(
+          `\\pard\\sa100\\f0\\fs19\\cf3 ${toRtfUnicode(
+            `Mejaber / Ramá: ${q.mejaberAndRamaNote}`
+          )}\\par`
+        );
+      }
+    });
+  }
+
   if (
     derasha?.contemporaryMasters?.readings &&
     derasha.contemporaryMasters.readings.length > 0
@@ -1030,7 +1105,12 @@ export function buildLessonPrintableHtml(
     derasha?.theologicalKeys || phase1?.theologicalKeys
   );
   const halakhicVal = derasha?.halakhicValidation || phase1?.halakhicValidation;
-  const suppressExternal = Boolean(halakhicVal?.externalPhilosophyInjectionDisabled);
+  const halakhicConsultation =
+    derasha?.halakhicConsultation || phase1?.halakhicConsultation;
+  const suppressExternal = Boolean(
+    halakhicVal?.externalPhilosophyInjectionDisabled ||
+      halakhicConsultation?.externalPhilosophyOmitted
+  );
   const externalSources = !suppressExternal
     ? derasha?.externalSources?.length
       ? derasha.externalSources
@@ -1833,6 +1913,40 @@ export function buildLessonPrintableHtml(
       ${morphologyHtml}
       ${theologicalKeysHtml}
       ${sourcesHtml}
+      ${
+        halakhicConsultation?.active && halakhicConsultation.directQuotes.length > 0
+          ? `<div class="section-block" style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 18px;">
+              <h2 class="section-title" style="color:#065f46;border-bottom-color:#a7f3d0;">Módulo Halájico · Citas Directas del Shulján Aruj (${escapeHtml(
+                halakhicConsultation.consultedBranchLabels.join(' · ')
+              )})</h2>
+              <p class="body-p" style="font-size:10.5pt;color:#047857;margin-bottom:10px;">
+                <strong>Criterio del Pipeline:</strong> Filosofía externa o comparativa omitida estrictamente.
+              </p>
+              ${halakhicConsultation.directQuotes
+                .map(
+                  (q) => `<div class="source-item" style="border-color:#a7f3d0;background:#ffffff;">
+                    <div class="source-ref" style="color:#065f46;"><strong>${escapeHtml(
+                      q.simanSeifLabel
+                    )}</strong> · ${escapeHtml(q.topicLabel)} <span style="font-size:9.5pt;color:#475569;">(${escapeHtml(
+                    q.focusBranchLabel
+                  )})</span></div>
+                    <p class="pasuk-hebrew" dir="rtl" style="font-size:12pt;margin:4px 0;">«${escapeHtml(
+                      q.briefHebrewQuote
+                    )}»</p>
+                    <p class="source-trans">«${escapeHtml(q.briefSpanishQuote)}»</p>
+                    ${
+                      q.mejaberAndRamaNote
+                        ? `<p class="source-trans" style="margin-top:4px;color:#0369a1;"><strong>Mejaber / Ramá:</strong> ${escapeHtml(
+                            q.mejaberAndRamaNote
+                          )}</p>`
+                        : ''
+                    }
+                  </div>`
+                )
+                .join('')}
+            </div>`
+          : ''
+      }
       ${externalContrastHtml}
       ${contemporaryMastersHtml}
       ${followUpsHtml}

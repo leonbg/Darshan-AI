@@ -12,6 +12,12 @@ import {
   validatePurelyHalakhicQuery,
 } from '../utils/halakhicPipelineValidator';
 import {
+  consultHalakhicShulchanArukhModule,
+  enrichHalakhicConsultationWithVerifiedSources,
+  getHalakhicShulchanArukhSeedSources,
+  mergeHalakhicRefsWithPredictions,
+} from '../utils/halakhicShulchanArukhModule';
+import {
   evaluateMethodologyLogicGates,
   resolvePipelineMethodology,
 } from '../utils/methodologyLogicGates';
@@ -229,6 +235,12 @@ const CANONICAL_FALLBACK_SOURCES_MAP: Record<string, VerifiedSefariaSource> = {
   },
 };
 
+for (const seed of getHalakhicShulchanArukhSeedSources()) {
+  if (!CANONICAL_FALLBACK_SOURCES_MAP[seed.ref]) {
+    CANONICAL_FALLBACK_SOURCES_MAP[seed.ref] = seed;
+  }
+}
+
 export function getCanonicalFallbackSource(ref: string): VerifiedSefariaSource {
   const exact = CANONICAL_FALLBACK_SOURCES_MAP[ref];
   if (exact) return exact;
@@ -335,6 +347,11 @@ export function buildClientPhase1Fallback(
       query
     );
   const isPureHalakha = halakhicValidation.isPurelyHalakhic;
+  const halakhicConsultation = consultHalakhicShulchanArukhModule(
+    query,
+    halakhicValidation
+  );
+  const primarySaQuote = halakhicConsultation.directQuotes[0];
   const cleanEssenceTitle = distillTopicEssence(query);
 
   const selectedRefs: Array<{
@@ -342,6 +359,7 @@ export function buildClientPhase1Fallback(
     heRef: string;
     rationale: string;
     category: 'Tanaj' | 'Mishná' | 'Talmud' | 'Liturgia' | 'Midrash' | 'Halajá';
+    exactQuoteHebrew?: string;
   }> = isHalel
     ? [
         {
@@ -375,6 +393,27 @@ export function buildClientPhase1Fallback(
           category: 'Halajá',
         },
       ]
+    : isPureHalakha && halakhicConsultation.active && halakhicConsultation.directQuotes.length > 0
+    ? (mergeHalakhicRefsWithPredictions(
+        halakhicConsultation,
+        [
+          {
+            ref: 'Taanit 28b',
+            heRef: 'תענית כ״ח ב',
+            rationale:
+              'Principio talmúdico «Minhag avoteijem be-yadeijem» (la costumbre de sus padres está en sus manos).',
+            category: 'Talmud',
+          },
+          {
+            ref: "Shulchan Arukh, Yoreh De'ah 214:1",
+            heRef: 'שולחן ערוך יורה דעה רי״ד:א׳',
+            rationale:
+              'Fuerza normativa del Minhag comunitario («No abandones la enseñanza de tu madre», Proverbios 1:8).',
+            category: 'Halajá',
+          },
+        ],
+        5
+      ) as any)
     : isPureHalakha
     ? [
         {
@@ -451,6 +490,9 @@ export function buildClientPhase1Fallback(
       ];
 
   const preVerifiedSources = selectedRefs.map((r) => getCanonicalFallbackSource(r.ref));
+  const enrichedConsultation = halakhicConsultation.active
+    ? enrichHalakhicConsultationWithVerifiedSources(halakhicConsultation, preVerifiedSources)
+    : undefined;
 
   const rawResult: Phase1AnalysisResult = {
     title: isHalel
@@ -458,6 +500,8 @@ export function buildClientPhase1Fallback(
       : cleanEssenceTitle,
     primaryHebrew: isHalel
       ? 'הַלְלוּיָהּ הַלְלוּ עַבְדֵי ה׳ · מִנְהַג אֲבוֹתֵיהֶם בִּידֵיהֶם'
+      : isPureHalakha && primarySaQuote
+      ? primarySaQuote.briefHebrewQuote
       : isPureHalakha
       ? 'שֻׁלְחָן עָרוּךְ · מִנְהַג יִשְׂרָאֵל תּוֹרָה הִיא'
       : isSpeechEthics
@@ -465,6 +509,8 @@ export function buildClientPhase1Fallback(
       : 'כִּי נֵר מִצְוָה וְתוֹרָה אוֹר וְדֶרֶךְ חַיִּים תּוֹכְחוֹת מוּסָר',
     transliteration: isHalel
       ? 'Haleluyá Halelú Avdei Hashem · Minhag Avoteijem BeYadeijem'
+      : isPureHalakha && primarySaQuote
+      ? `${primarySaQuote.simanSeifLabel} · ${primarySaQuote.topicLabel}`
       : isPureHalakha
       ? 'Shulján Aruj · Minhag Yisrael Torá Hi'
       : isSpeechEthics
@@ -472,13 +518,19 @@ export function buildClientPhase1Fallback(
       : 'Ki Ner Mitzvá veTorá Or veDérej Jaim Tojejot Musar',
     literalSpanishTranslation: isHalel
       ? 'Alaben los siervos de Hashem (Salmos 113:1) · La costumbre de sus ancestros está en sus manos (Taanit 28b).'
+      : isPureHalakha && primarySaQuote
+      ? `${primarySaQuote.simanSeifLabel}: ${primarySaQuote.briefSpanishQuote}`
       : isPureHalakha
       ? 'Mesa Preparada (Código de la Halajá) · La costumbre de Israel es Torá.'
       : isSpeechEthics
       ? 'La muerte y la vida están en poder de la lengua; pues aún no hay palabra en mi lengua que Tú no conozcas.'
       : 'Porque lámpara es el mandamiento y la Torá es luz, y camino de vida son las enseñanzas éticas.',
     liturgicalContext: isPureHalakha
-      ? `Corpus Halájico Interno · ${halakhicValidation.halakhicDomainLabels.join(' · ')} (Sin citas filosóficas externas)`
+      ? `Corpus Halájico Interno · ${
+          halakhicConsultation.active
+            ? halakhicConsultation.consultedBranchLabels.join(' · ')
+            : halakhicValidation.halakhicDomainLabels.join(' · ')
+        } (Shulján Aruj · Sin filosofía externa)`
       : gateEval.gateTitle,
     morphologicalBreakdown: isPureHalakha
       ? [
@@ -616,6 +668,7 @@ export function buildClientPhase1Fallback(
     toneAdvisory: toneEval.advisoryReason,
     logicGateReason: gateEval.explanation,
     halakhicValidation,
+    ...(enrichedConsultation ? { halakhicConsultation: enrichedConsultation } : {}),
     ...(thinkerDet?.detected ? { externalThinkerDetection: thinkerDet } : {}),
     stageTimingsMs: {
       stage1MorphologyMs: 5,
@@ -671,6 +724,17 @@ export function buildClientPhase3DerashaFallback(params: {
   );
   const derashaTitle = distillTopicEssence(query, params.title);
 
+  const halakhicConsultation = consultHalakhicShulchanArukhModule(
+    query,
+    halakhicValidation
+  );
+  const enrichedConsultation = halakhicConsultation.active
+    ? enrichHalakhicConsultationWithVerifiedSources(
+        halakhicConsultation,
+        params.verifiedSources || []
+      )
+    : undefined;
+
   const grounded = buildTopicGroundedExegeticAnalysis({
     query,
     effectiveTitle: derashaTitle,
@@ -685,15 +749,20 @@ export function buildClientPhase3DerashaFallback(params: {
     theologicalKeys: params.theologicalKeys,
     verifiedSources: params.verifiedSources,
     resolvedTone: toneEval.resolvedTone,
+    halakhicConsultation: enrichedConsultation,
   });
 
+  const isHalel =
+    /\b(halel|hallel|rosh\s+j[oó]desh|rosh\s+chodesh|j[oó]desh\s+mal[eé]|j[oó]desh\s+jaser|mes\s+que\s+termina)\b/i.test(
+      query
+    );
   const isHalakhaFallback = halakhicValidation.isPurelyHalakhic;
 
-  const openingExordium = isHalakhaFallback
+  const openingExordium = isHalel
     ? `El estudio sobre ${grounded.cleanEssence} parte directamente de las fuentes internas de la Halajá, el Talmud Bavli, Mishné Torá de Maimónides (incluyendo Hiljot Kidush HaJódesh 8:4 sobre por qué Rosh Jódesh es de 1 o 2 días según si el mes que termina tiene 29 días [Jódesh Jaser] o 30 días [Jódesh Malé]) y el Shulján Aruj (dialogando entre Rabí Yosef Karo —el Mejaber— y Rabí Moshé Isserles —el Ramá— junto con los matices de Minhag y Núsaj), manteniendo estricto apego al corpus jurídico judío.`
     : grounded.openingExordium;
 
-  const pardes = isHalakhaFallback
+  const pardes = isHalel
     ? {
         pshat: {
           hebrewPillar: 'פְּשָׁט וַהֲלָכָה',
@@ -730,7 +799,7 @@ export function buildClientPhase3DerashaFallback(params: {
       }
     : grounded.pardes;
 
-  const methodologySections = isHalakhaFallback
+  const methodologySections = isHalel
     ? [
         {
           key: 'halakha_pshat',
@@ -809,18 +878,20 @@ export function buildClientPhase3DerashaFallback(params: {
     morphologicalSynthesis: grounded.morphologicalSynthesis,
     canonicalAnalysis: grounded.canonicalAnalysis,
     pardes,
-    practicalConclusion: isHalakhaFallback
-      ? {
-          title: 'Síntesis Normativa y Criterio de Estudio Halájico',
-          hashkafa:
-            'La sabiduría de la Halajá une el rigor de las fuentes talmúdicas y del Shulján Aruj con el respeto vivo a las costumbres comunitarias (Minhag y Núsaj).',
-          prayerKavanah:
-            'Al recitar nuestras plegarias y observar los preceptos, conectar cada detalle normativo con la cadena viva de las generaciones.',
-          dailyAction:
-            'Verificar en la práctica diaria el Minhag y Núsaj de nuestra comunidad conforme al dictamen de nuestros Poskim.',
-        }
-      : grounded.practicalConclusion,
+    practicalConclusion:
+      isHalakhaFallback && isHalel
+        ? {
+            title: 'Síntesis Normativa y Criterio de Estudio Halájico',
+            hashkafa:
+              'La sabiduría de la Halajá une el rigor de las fuentes talmúdicas y del Shulján Aruj con el respeto vivo a las costumbres comunitarias (Minhag y Núsaj).',
+            prayerKavanah:
+              'Al recitar nuestras plegarias y observar los preceptos, conectar cada detalle normativo con la cadena viva de las generaciones.',
+            dailyAction:
+              'Verificar en la práctica diaria el Minhag y Núsaj de nuestra comunidad conforme al dictamen de nuestros Poskim.',
+          }
+        : grounded.practicalConclusion,
     halakhicValidation,
+    ...(enrichedConsultation ? { halakhicConsultation: enrichedConsultation } : {}),
     stageTimingsMs: {
       stage3LlmMs: 8,
       markdownAssemblyMs: 2,

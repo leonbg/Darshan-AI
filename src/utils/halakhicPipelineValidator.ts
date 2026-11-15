@@ -10,13 +10,13 @@ interface HalakhicDomainPatternGroup {
 const HALAKHIC_DOMAIN_GROUPS: HalakhicDomainPatternGroup[] = [
   {
     category: 'LEYES_REZOS_Y_LITURGIA',
-    label: 'Leyes de Rezos y Liturgia (Tefilá, Berajot, Halel y Núsaj)',
+    label: 'Leyes de Rezos y Liturgia (Tefilá, Berajot, Shemá, Amidá y Núsaj)',
     recommendedSources: [
       'Shulchan Arukh, Orach Chayim 1:1',
+      'Shulchan Arukh, Orach Chayim 61:1',
       'Shulchan Arukh, Orach Chayim 68:1',
+      'Shulchan Arukh, Orach Chayim 98:1',
       'Shulchan Arukh, Orach Chayim 422:2',
-      'Pesachim 117a',
-      'Berakhot 26b',
     ],
     patterns: [
       {
@@ -25,19 +25,19 @@ const HALAKHIC_DOMAIN_GROUPS: HalakhicDomainPatternGroup[] = [
           /(?<![a-záéíóúñ])(?:halel|hallel|jats[ií]\s+halel|halel\s+shalem|medio\s+halel|halel\s+completo|halel\s+ha[- ]?mitsr[ií]|halel\s+ha[- ]?gadol)(?![a-záéíóúñ])/i,
       },
       {
-        termLabel: 'Tefilá / Leyes de Rezos / Plegaria',
+        termLabel: 'Leyes de Rezos / Tefilá / Plegaria / Oración',
         regex:
-          /(?<![a-záéíóúñ])(?:tefil[aá]h?|tefilot|leyes?\s+de\s+rezos?|rezos?\s+jud[ií]os?|shajarit|minj[aá]h?|arvit|maariv|musaf|neil[aá]h?)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:tefil[aá]h?|tefilot|leyes?\s+de\s+(?:los\s+)?rezos?|rezos?\s+jud[ií]os?|rezos?|rezo|rezar|plegarias?|oraciones?|shajarit|minj[aá]h?|arvit|maariv|musaf|neil[aá]h?)(?![a-záéíóúñ])/i,
       },
       {
-        termLabel: 'Amidá / Shemoné Esré / Bendiciones',
+        termLabel: 'Amidá / Shemá / Bendiciones / Netilat Yadayim',
         regex:
-          /(?<![a-záéíóúñ])(?:amid[aá]h?|shemon[eé]\s+esr[eé]|dieciocho\s+bendiciones|beraj[aá]h?|berajot|birkat\s+hamaz[oó]n|birkat\s+kohanim|ashrei|pesukei\s+de[- ]?zimr[aá]|tachan[uú]n|tajan[uú]n|selijot|kadish|kedush[aá]h?|modim|alenu|aleinu)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:amid[aá]h?|shemon[eé]\s+esr[eé]|dieciocho\s+bendiciones|beraj[aá]h?|berajot|bendici[oó]n|bendiciones|birkat\s+hamaz[oó]n|birkat\s+kohanim|bendici[oó]n\s+sacerdotal|ashrei|pesukei\s+de[- ]?zimr[aá]|tachan[uú]n|tajan[uú]n|selijot|kadish|kedush[aá]h?|modim|alenu|aleinu|netilat\s+yadayim|lavado\s+de\s+manos|hamotz[ií])(?![a-záéíóúñ])/i,
       },
       {
         termLabel: 'Shemá / Tefilín / Tzitzit / Talit / Minyán',
         regex:
-          /(?<![a-záéíóúñ])(?:keriat\s+shem[aá]|tefil[ií]n|filacterias|tzitzit|tsitsit|talit|miny[aá]n|keriat\s+ha[- ]?tor[aá]|aliy[aá]h?\s+a\s+la\s+tor[aá]|sidur|siddur|majzor)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:keriat\s+shem[aá]|shem[aá]\s+yisrael|el\s+shem[aá]|tefil[ií]n|filacterias|tzitzit|tsitsit|talit|miny[aá]n|keriat\s+ha[- ]?tor[aá]|aliy[aá]h?\s+a\s+la\s+tor[aá]|sidur|siddur|majzor)(?![a-záéíóúñ])/i,
       },
     ],
   },
@@ -45,23 +45,23 @@ const HALAKHIC_DOMAIN_GROUPS: HalakhicDomainPatternGroup[] = [
     category: 'FESTIVIDADES_Y_SHABAT',
     label: 'Festividades, Shabat y Calendario Judío (Moadim, Rosh Jódesh y Shabat)',
     recommendedSources: [
+      'Shulchan Arukh, Orach Chayim 242:1',
+      'Shulchan Arukh, Orach Chayim 263:1',
       'Shulchan Arukh, Orach Chayim 422:2',
       'Shulchan Arukh, Orach Chayim 427:1',
-      'Mishneh Torah, Sanctification of the New Moon 8:4',
-      'Shulchan Arukh, Orach Chayim 242:1',
       'Shulchan Arukh, Orach Chayim 453:1',
-      'Taanit 28b',
+      'Shulchan Arukh, Orach Chayim 671:1',
     ],
     patterns: [
       {
-        termLabel: 'Shabat / Leyes de Shabat',
+        termLabel: 'Shabat / Velas / Kidush / Havdalá / Muktzé',
         regex:
-          /(?<![a-záéíóúñ])(?:shabat|shabbat|kabbalat\s+shabat|kidush|kiddush|havdal[aá]h?|muktz[eé]|eruv|melaj[aá]h?|melajot|oneg\s+shabat|seuda\s+shlishit|melav[eé]\s+malk[aá])(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:shabat|shabbat|kabbalat\s+shabat|kidush|kiddush|havdal[aá]h?|muktz[eé]|eruv|melaj[aá]h?|melajot|oneg\s+shabat|seuda\s+shlishit|melav[eé]\s+malk[aá]|velas?\s+de\s+shabat|encender\s+velas)(?![a-záéíóúñ])/i,
       },
       {
         termLabel: 'Pésaj / Sucot / Shavuot (Shalosh Regalim)',
         regex:
-          /(?<![a-záéíóúñ])(?:p[eé]saj|pesach|seder\s+de\s+p[eé]saj|hagad[aá]h?|matz[aá]h?|jametz|chametz|bedikat\s+jametz|biur\s+jametz|sucot|sukkot|suc[aá]h?|lulav|etrog|arav[aá]h?|had[aá]s|arba[aá]\s+minim|hoshan[aá]\s+rab[aá]|shemin[ií]\s+atz[eé]ret|simjat\s+tor[aá]|shavuot|omer|sefirat\s+ha[- ]?omer|lag\s+ba[- ]?omer)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:p[eé]saj|pesach|seder\s+de\s+p[eé]saj|hagad[aá]h?|matz[aá]h?|jametz|chametz|bedikat\s+jametz|biur\s+jametz|sucot|sukkot|suc[aá]h?|lulav|etrog|arav[aá]h?|had[aá]s|arba[aá]\s+minim|cuatro\s+especies|hoshan[aá]\s+rab[aá]|shemin[ií]\s+atz[eé]ret|simjat\s+tor[aá]|shavuot|omer|sefirat\s+ha[- ]?omer|lag\s+ba[- ]?omer)(?![a-záéíóúñ])/i,
       },
       {
         termLabel: 'Rosh Hashaná / Yom Kipur / Yamim Noraim',
@@ -69,31 +69,32 @@ const HALAKHIC_DOMAIN_GROUPS: HalakhicDomainPatternGroup[] = [
           /(?<![a-záéíóúñ])(?:rosh\s+hashan[aá]h?|shofar|tkiah|teki[aá]h?|shevarim|teru[aá]h?|yom\s+kipur|yom\s+kippur|kol\s+nidrei|yamim\s+noraim|aseret\s+yemei\s+teshuv[aá])(?![a-záéíóúñ])/i,
       },
       {
-        termLabel: 'Rosh Jódesh (1 o 2 días · Mes Jaser 29 días vs. Malé 30 días) / Janucá / Purim',
+        termLabel: 'Festividades / Rosh Jódesh / Janucá / Purim',
         regex:
-          /(?<![a-záéíóúñ])(?:januc[aá]h?|chanukah|hanukkah|janukiy[aá]h?|al\s+ha[- ]?nisim|purim|meguil[aá]h?\s+de\s+ester|mishl[oó]aj\s+manot|matanot\s+la[- ]?evyonim|rosh\s+j[oó]desh|rosh\s+chodesh|j[oó]desh\s+mal[eé]|j[oó]desh\s+jaser|mes\s+que\s+termina|kidush\s+ha[- ]?j[oó]desh|shabat\s+mevajarim|yaal[eé]\s+ve[- ]?yav[oó]|jol\s+ha[- ]?moed|yom\s+tov|tish[aá]\s+be[- ]?av|taanit|ayuno\s+de\s+(?:ester|guedali[aá]|tevet|tamuz)|festividades?\s+jud[ií]as?)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:januc[aá]h?|chanukah|hanukkah|janukiy[aá]h?|menorah|al\s+ha[- ]?nisim|purim|meguil[aá]h?(?:\s+de\s+ester)?|mishl[oó]aj\s+manot|matanot\s+la[- ]?evyonim|rosh\s+j[oó]desh|rosh\s+chodesh|j[oó]desh\s+mal[eé]|j[oó]desh\s+jaser|mes\s+que\s+termina|kidush\s+ha[- ]?j[oó]desh|shabat\s+mevajarim|yaal[eé]\s+ve[- ]?yav[oó]|jol\s+ha[- ]?moed|yom\s+tov|tish[aá]\s+be[- ]?av|taanit|ayuno\s+de\s+(?:ester|guedali[aá]|tevet|tamuz)|festividades?(?:\s+jud[ií]as?)?|fiestas?\s+jud[ií]as?|moadim|jaguim)(?![a-záéíóúñ])/i,
       },
     ],
   },
   {
     category: 'KASHRUT_Y_LEYES_ALIMENTARIAS',
-    label: 'Kashrut y Leyes Alimentarias (Yoré Deá)',
+    label: 'Kashrut y Leyes Alimentarias (Yoré Deá · Carne y Leche, Utensilios, Shejitá)',
     recommendedSources: [
       "Shulchan Arukh, Yoreh De'ah 87:1",
-      "Shulchan Arukh, Yoreh De'ah 214:1",
-      'Shulchan Arukh, Orach Chayim 453:1',
-      'Chullin 103b',
+      "Shulchan Arukh, Yoreh De'ah 89:1",
+      "Shulchan Arukh, Yoreh De'ah 98:1",
+      "Shulchan Arukh, Yoreh De'ah 120:1",
+      'Shulchan Arukh, Orach Chayim 451:1',
     ],
     patterns: [
       {
-        termLabel: 'Kashrut / Kosher / Kasher',
+        termLabel: 'Kashrut / Kosher / Kasher / Alimentos',
         regex:
-          /(?<![a-záéíóúñ])(?:kashrut|kosher|kasher|casher|leyes?\s+alimentarias?|leyes?\s+diet[eé]ticas?)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:kashrut|kosher|kasher|casher|leyes?\s+alimentarias?|leyes?\s+diet[eé]ticas?|comida\s+kosher|cocina\s+kosher|parve|pareve)(?![a-záéíóúñ])/i,
       },
       {
-        termLabel: 'Basar BeJalav / Shejitá / Kitniyot / Tevilat Kelim',
+        termLabel: 'Basar BeJalav / Shejitá / Tevilat Kelim / Kashering',
         regex:
-          /(?<![a-záéíóúñ])(?:basar\s+be[- ]?jalav|carne\s+y\s+leche|l[aá]cteos?\s+y\s+c[aá]rnicos?|shejit[aá]h?|sh[oó]jet|bedik[aá]h?|treif|tar[eé]f|glatt|kitniyot|bishul\s+akum|pat\s+akum|stam\s+yeinam|tevilat\s+kelim|kashering|hag[- ]?al[aá]h?|lib[uú]n|hafrashat\s+jal[aá]h?|orl[aá]h?|terumot|maaserot|shmit[aá]h?)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:basar\s+be[- ]?jalav|carne\s+y\s+leche|l[aá]cteos?\s+y\s+c[aá]rnicos?|esperar\s+(?:seis|6)\s+horas|bitul\s+be[- ]?shishim|anulaci[oó]n\s+en\s+sesenta|shejit[aá]h?|sh[oó]jet|bedik[aá]h?|treif|tar[eé]f|glatt|kitniyot|bishul\s+akum|pat\s+akum|jalav\s+yisrael|stam\s+yeinam|tevilat\s+kelim|inmersi[oó]n\s+de\s+utensilios|utensilios?\s+kosher|vajilla\s+kosher|kashering|kasherizar|hag[- ]?al[aá]h?|lib[uú]n|salado\s+de\s+la\s+carne|meli[aá]h?|sangre\s+en\s+la\s+carne|hafrashat\s+jal[aá]h?|orl[aá]h?|terumot|maaserot|shmit[aá]h?|revisi[oó]n\s+de\s+insectos|bedikat\s+tolaim)(?![a-záéíóúñ])/i,
       },
     ],
   },
@@ -218,7 +219,7 @@ export function validatePurelyHalakhicQuery(rawQuery: string): HalakhicPipelineV
     };
   }
 
-  const validatorSummary = `Validador Halájico del Pipeline Activo: Consulta identificada como de carácter puramente halájico (${matchedDomainLabels.join(' · ')}). Se ha desactivado automáticamente toda inyección de citas filosóficas externas o comparativas (Kant, Platón, Cicerón, Aristóteles, Estoicismo, etc.), restringiendo el análisis al canon judío (Tanaj, Mishná, Talmud, Rambam, Shulján Aruj, Mejaber, Ramá, Minhag y Núsaj).`;
+  const validatorSummary = `Validador Halájico del Pipeline Activo: Consulta identificada como de carácter puramente halájico (${matchedDomainLabels.join(' · ')}). Se ha omitido toda inyección de filosofía externa o comparativa, restringiendo el análisis al canon judío interno (Tanaj, Mishná, Talmud, Rambam, Shulján Aruj, Mejaber, Ramá, Minhag y Núsaj).`;
 
   const systemPromptGuard = `\n\n[VALIDADOR HALÁJICO DEL PIPELINE ACTIVO — INYECCIÓN DE CITAS FILOSÓFICAS EXTERNAS DESACTIVADA]:
 - El validador del pipeline determinó que esta consulta es de carácter PURAMENTE HALÁJICO / LITÚRGICO INTERNO (${matchedDomainLabels.join('; ')} — Términos detectados: ${matchedTerms.join(', ')}).
@@ -259,6 +260,21 @@ export function sanitizeHalakhicOutputFromExternalCitations<T extends Record<str
     delete clone.externalSources;
     delete clone.formalContrast;
     delete clone.externalThinkerDetection;
+    if (Array.isArray(clone.metodologiasComplementarias)) {
+      clone.metodologiasComplementarias = clone.metodologiasComplementarias.filter(
+        (m: any) => m !== 'FILOSOFIA_CONTRASTIVA'
+      );
+    }
+    if (Array.isArray(clone.complementaryMethodologies)) {
+      clone.complementaryMethodologies = clone.complementaryMethodologies.filter(
+        (m: any) => m !== 'FILOSOFIA_CONTRASTIVA'
+      );
+    }
+    if (Array.isArray(clone.methodologySections)) {
+      clone.methodologySections = clone.methodologySections.filter(
+        (s: any) => s?.sourceMethodology !== 'FILOSOFIA_CONTRASTIVA'
+      );
+    }
   }
 
   return clone as T;

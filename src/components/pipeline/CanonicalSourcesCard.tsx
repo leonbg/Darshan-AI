@@ -98,10 +98,14 @@ export const CanonicalSourcesCard: React.FC<CanonicalSourcesCardProps> = React.m
             <span>Biblioteca de Sefaria · Textos Masoréticos y Rabínicos</span>
           </div>
           <h3 className="font-editorial text-xl sm:text-2xl font-bold text-white">
-            Fuentes Internas de la Torá y Fuentes Externas Comparadas
+            {externalSources && externalSources.length > 0 || formalContrast?.isComparativeStudy
+              ? 'Fuentes Internas de la Torá y Fuentes Externas Comparadas'
+              : 'Fuentes Internas de la Torá y Citas Canónicas'}
           </h3>
           <p className="text-xs text-slate-400">
-            Textos hebreos originales de Sefaria con traducción bilingüe y fuentes externas para estudios comparativos
+            {externalSources && externalSources.length > 0 || formalContrast?.isComparativeStudy
+              ? 'Textos hebreos originales de Sefaria con traducción bilingüe y fuentes externas para estudios comparativos'
+              : 'Textos hebreos originales de Sefaria con traducción bilingüe y referencias halájicas'}
           </p>
         </div>
 

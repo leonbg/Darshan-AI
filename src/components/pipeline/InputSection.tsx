@@ -760,46 +760,70 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
           </div>
         )}
 
-        {/* Live Pipeline Halakhic Validator Indicator: Automatically disables external philosophical citations on purely Halakhic queries */}
+        {/* Live Pipeline Halakhic Validator & Shulchan Arukh Module Indicator */}
         {gateEvaluation.halakhicValidation?.isPurelyHalakhic && (
-          <div className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-500/35 space-y-2 text-xs animate-fadeIn">
+          <div className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-500/35 space-y-2.5 text-xs animate-fadeIn">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="font-bold text-emerald-200">
-                  Validador Halájico del Pipeline Activo ·{' '}
+                  Módulo Halájico del Shulján Aruj Activo ·{' '}
                   <span className="text-white">
-                    Consulta de Carácter Puramente Halájico
+                    {gateEvaluation.halakhicConsultation?.consultedBranchLabels.length
+                      ? gateEvaluation.halakhicConsultation.consultedBranchLabels.join(' · ')
+                      : 'Consulta de Carácter Puramente Halájico'}
                   </span>
                 </span>
               </div>
               <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/35 text-emerald-200 font-mono text-[10px]">
-                Citas Filosóficas Externas: DESACTIVADAS
+                Filosofía Externa / Comparativa: OMITIDA
               </span>
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed">
-              <strong className="text-emerald-300">Dominios halájicos detectados:</strong>{' '}
+              <strong className="text-emerald-300">Leyes consultadas en Shulján Aruj:</strong>{' '}
               {gateEvaluation.halakhicValidation.halakhicDomainLabels.join(' · ')}.{' '}
               <span className="text-slate-400">
-                El validador desactiva automáticamente toda inyección de citas filosóficas externas o comparativas (Kant, Platón, Cicerón, etc.) y restringe el estudio a fuentes internas de Halajá, Talmud, Rambam,{' '}
+                El módulo consulta leyes específicas de rezos, festividades o kashrut e integra citas breves y directas del{' '}
                 <strong className="text-amber-300">Shulján Aruj (Mejaber y Ramá)</strong>,{' '}
-                <strong className="text-sky-300">Minhag y Núsaj</strong>.
+                <strong className="text-sky-300">Minhag y Núsaj</strong>, omitiendo toda inyección de filosofía externa o comparativa.
               </span>
             </p>
 
-            {gateEvaluation.halakhicValidation.recommendedHalakhicSources.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {gateEvaluation.halakhicValidation.recommendedHalakhicSources.map((srcRef) => (
-                  <span
-                    key={srcRef}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-[10px] font-medium text-emerald-200"
+            {gateEvaluation.halakhicConsultation?.active &&
+            gateEvaluation.halakhicConsultation.directQuotes.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
+                {gateEvaluation.halakhicConsultation.directQuotes.slice(0, 4).map((q) => (
+                  <div
+                    key={q.id}
+                    className="flex items-start gap-2 p-2 rounded-lg bg-slate-950/60 border border-emerald-500/25 text-[11px]"
                   >
-                    <ScrollText className="w-3 h-3 text-emerald-400 shrink-0" />
-                    <span>{srcRef}</span>
-                  </span>
+                    <ScrollText className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="font-semibold text-emerald-200 truncate">
+                        {q.simanSeifLabel} · {q.topicLabel}
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate" dir="rtl">
+                        {q.briefHebrewQuote}
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
+            ) : (
+              gateEvaluation.halakhicValidation.recommendedHalakhicSources.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {gateEvaluation.halakhicValidation.recommendedHalakhicSources.map((srcRef) => (
+                    <span
+                      key={srcRef}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-[10px] font-medium text-emerald-200"
+                    >
+                      <ScrollText className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span>{srcRef}</span>
+                    </span>
+                  ))}
+                </div>
+              )
             )}
           </div>
         )}

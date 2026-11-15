@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -12,6 +13,12 @@ import {
   validatePurelyHalakhicQuery,
   sanitizeHalakhicOutputFromExternalCitations,
 } from './src/utils/halakhicPipelineValidator.ts';
+import {
+  consultHalakhicShulchanArukhModule,
+  enrichHalakhicConsultationWithVerifiedSources,
+  getHalakhicShulchanArukhSeedSources,
+  mergeHalakhicRefsWithPredictions,
+} from './src/utils/halakhicShulchanArukhModule.ts';
 import {
   composeAudienceAndTone,
   getToneMeta,
@@ -893,6 +900,13 @@ for (const seed of PRE_SEEDED_CANONICAL_SOURCES) {
     verified: true,
     statusText: 'Verificado en Sefaria v3',
   });
+}
+
+for (const saSeed of getHalakhicShulchanArukhSeedSources()) {
+  const saKey = saSeed.ref.toLowerCase();
+  if (!sefariaServerCache.has(saKey)) {
+    sefariaServerCache.set(saKey, saSeed);
+  }
 }
 
 function cleanServerSefariaHtml(raw: any): string {
@@ -2071,9 +2085,13 @@ function resolveEffectiveMethodology(requestedMetodologia: string, query: string
   const q = (query || '').trim();
   if (!q) return m && m !== 'AUTO' ? m : 'PARDES';
 
-  // Dedicated External Thinker Detector Module: automatically forces FILOSOFIA_CONTRASTIVA whenever an external philosopher/thinker (Kant, Platón, Cicerón, Aristóteles, Epicteto, Spinoza, Nietzsche, Buda, etc.) is mentioned
-  const externalThinkerDetection = detectExternalThinkerAndForceExegeticalSearch(q);
-  if (externalThinkerDetection.detected) {
+  const halakhicCheck = validatePurelyHalakhicQuery(q);
+
+  // Dedicated External Thinker Detector Module: automatically forces FILOSOFIA_CONTRASTIVA whenever an external philosopher/thinker is mentioned (disabled for purely Halakhic topics)
+  const externalThinkerDetection = halakhicCheck.externalPhilosophyInjectionDisabled
+    ? detectExternalThinkerAndForceExegeticalSearch('')
+    : detectExternalThinkerAndForceExegeticalSearch(q);
+  if (externalThinkerDetection.detected && !halakhicCheck.externalPhilosophyInjectionDisabled) {
     return 'FILOSOFIA_CONTRASTIVA';
   }
 
@@ -2122,6 +2140,7 @@ function resolveEffectiveMethodology(requestedMetodologia: string, query: string
   ].filter((rx) => rx.test(q)).length;
 
   const hasExplicitInternalHalakhaOrLiturgy =
+    halakhicCheck.externalPhilosophyInjectionDisabled ||
     /(?<![a-záéíóúñ])(halel|hallel|jats[ií]\s+halel|halel\s+shalem|halaj[aá]h?|alaj[aá]h?|hal[aá]jic[oa]s?|shulj[aá]n\s+aruj|mishn[eé]\s+tor[aá]|pesajim|taanit|arj[ií]n|arakhin|berajot|rosh\s+j[oó]desh|modim|yotzer\s+bereshit|amid[aá]h?|shemon[eé]\s+esr[eé]|dieciocho\s+bendiciones|gueniz[aá]|geniz[aá]|sot[aá]h?\s+40a|wissenschaft|amram\s+ga[oó]n|saadia\s+ga[oó]n|majzor\s+vitry)(?![a-záéíóúñ])/i.test(
       q
     );
@@ -2215,9 +2234,13 @@ function resolveComplementaryMethodologies(
 
   const q = (query || '').trim();
   const { isComparativeTopic } = normalizeUserStudyQuery(q);
-  const thinkerDet = detectExternalThinkerAndForceExegeticalSearch(q);
+  const halakhicCheck = validatePurelyHalakhicQuery(q);
+  const thinkerDet = halakhicCheck.externalPhilosophyInjectionDisabled
+    ? detectExternalThinkerAndForceExegeticalSearch('')
+    : detectExternalThinkerAndForceExegeticalSearch(q);
   const allowFilosofiaContrastiva =
-    primary === 'FILOSOFIA_CONTRASTIVA' || isComparativeTopic || thinkerDet.detected;
+    !halakhicCheck.externalPhilosophyInjectionDisabled &&
+    (primary === 'FILOSOFIA_CONTRASTIVA' || isComparativeTopic || thinkerDet.detected);
 
   const userProvided = Array.isArray(rawComplementary)
     ? rawComplementary
@@ -2268,7 +2291,12 @@ function resolveComplementaryMethodologies(
   if (/(?<![a-záéíóúñ])(pirk[eé]i?\s+avot|hilel|shamai|ben zom[aá]|tana[ií]ta)(?![a-záéíóúñ])/i.test(q)) {
     candidates.push('PIRKE_AVOT_EXEGETICO');
   }
-  if (/(?<![a-záéíóúñ])(estoicismo|filosof[ií]a|ataraxia|kuzari|moreh nevujim|kant|plat[oó]n|cicer[oó]n|buda|budismo)(?![a-záéíóúñ])/i.test(q)) {
+  if (
+    allowFilosofiaContrastiva &&
+    /(?<![a-záéíóúñ])(estoicismo|filosof[ií]a|ataraxia|kuzari|moreh nevujim|kant|plat[oó]n|cicer[oó]n|buda|budismo)(?![a-záéíóúñ])/i.test(
+      q
+    )
+  ) {
     candidates.push('FILOSOFIA_CONTRASTIVA');
   }
 
@@ -2285,7 +2313,12 @@ function resolveComplementaryMethodologies(
 
   candidates.push(...(defaultMap[primary] || ['PARDES', 'MUSAR_TRANSFORMATIVO']));
 
-  const unique = Array.from(new Set(candidates)).filter((m) => m !== primary);
+  const unique = Array.from(new Set(candidates)).filter(
+    (m) =>
+      m !== primary &&
+      (!halakhicCheck.externalPhilosophyInjectionDisabled ||
+        m !== 'FILOSOFIA_CONTRASTIVA')
+  );
   return unique.slice(0, maxComp);
 }
 
@@ -2510,10 +2543,17 @@ app.post('/api/decide-methodology', async (req, res) => {
       FILOSOFIA_CONTRASTIVA: 'Contrasta formalmente fuentes filosóficas o religiosas externas frente a la Torá (Universalidad vs. Especificidad del Mandamiento).',
     };
 
+    const delibHalakhicConsultation = consultHalakhicShulchanArukhModule(query, delibHalakha);
     const orderedCandidates = [
       fastPrimary,
       ...fastComp30,
-      ...allSevenMethodologies.filter((m) => m !== fastPrimary && !fastComp30.includes(m)),
+      ...allSevenMethodologies.filter(
+        (m) =>
+          m !== fastPrimary &&
+          !fastComp30.includes(m) &&
+          (!delibHalakha.externalPhilosophyInjectionDisabled ||
+            m !== 'FILOSOFIA_CONTRASTIVA')
+      ),
     ];
 
     const candidates = orderedCandidates.map((method, idx) => {
@@ -2537,7 +2577,13 @@ app.post('/api/decide-methodology', async (req, res) => {
       recommendedComplementaryFor30Min: fastComp30,
       recommendedTone: delibToneEval.recommendedTone,
       toneRationale: delibToneEval.recommendationReason,
-      deliberationSummary: `Compuerta lógica de alta precisión: se selecciona ${fastPrimary} como metodología estructural primaria (con ${fastComp30.join(' y ')} como aportes complementarios) y tono sugerido «${getToneMeta(delibToneEval.recommendedTone).shortLabel}».`,
+      halakhicValidation: delibHalakha,
+      ...(delibHalakhicConsultation.active
+        ? { halakhicConsultation: delibHalakhicConsultation }
+        : {}),
+      deliberationSummary: delibHalakhicConsultation.active
+        ? `${delibHalakhicConsultation.moduleSummary} Se selecciona ${fastPrimary} como metodología primaria y tono «${getToneMeta(delibToneEval.recommendedTone).shortLabel}».`
+        : `Compuerta lógica de alta precisión: se selecciona ${fastPrimary} como metodología estructural primaria (con ${fastComp30.join(' y ')} como aportes complementarios) y tono sugerido «${getToneMeta(delibToneEval.recommendedTone).shortLabel}».`,
       candidates,
       deliberationTimeMs: Date.now() - startedAt,
     };
@@ -2580,6 +2626,10 @@ app.post('/api/analyze-roots', async (req, res) => {
     isComparativeTopic,
   } = normalizeUserStudyQuery(rawQuery);
   const halakhicValidation = validatePurelyHalakhicQuery(query);
+  const halakhicConsultation = consultHalakhicShulchanArukhModule(
+    query,
+    halakhicValidation
+  );
   const externalThinkerDetection = halakhicValidation.externalPhilosophyInjectionDisabled
     ? detectExternalThinkerAndForceExegeticalSearch('')
     : detectExternalThinkerAndForceExegeticalSearch(query);
@@ -2605,6 +2655,12 @@ app.post('/api/analyze-roots', async (req, res) => {
   const cachedP1 = phase1MemoryCache.get(phase1CacheKey);
   if (cachedP1) {
     const cacheElapsedMs = Date.now() - phase1StartedAt;
+    const enrichedCachedConsult = halakhicConsultation.active
+      ? enrichHalakhicConsultationWithVerifiedSources(
+          halakhicConsultation,
+          cachedP1.preVerifiedSources || []
+        )
+      : undefined;
     return res.json(
       sanitizeHalakhicOutputFromExternalCitations(
         {
@@ -2615,6 +2671,8 @@ app.post('/api/analyze-roots', async (req, res) => {
           tonoHomiletico: p1ToneEval.requestedTone,
           resolvedTone: p1ToneEval.resolvedTone,
           toneAdvisory: p1ToneEval.advisoryReason,
+          halakhicValidation,
+          ...(enrichedCachedConsult ? { halakhicConsultation: enrichedCachedConsult } : {}),
           ...(externalThinkerDetection.detected ? { externalThinkerDetection } : {}),
           stageTimingsMs: {
             stage1MorphologyMs: 0,
@@ -2633,6 +2691,12 @@ app.post('/api/analyze-roots', async (req, res) => {
   if (existingInFlightP1) {
     try {
       const coalescedResult = await existingInFlightP1;
+      const enrichedCoalescedConsult = halakhicConsultation.active
+        ? enrichHalakhicConsultationWithVerifiedSources(
+            halakhicConsultation,
+            coalescedResult?.preVerifiedSources || []
+          )
+        : undefined;
       return res.json(
         sanitizeHalakhicOutputFromExternalCitations(
           {
@@ -2643,6 +2707,8 @@ app.post('/api/analyze-roots', async (req, res) => {
             tonoHomiletico: p1ToneEval.requestedTone,
             resolvedTone: p1ToneEval.resolvedTone,
             toneAdvisory: p1ToneEval.advisoryReason,
+            halakhicValidation,
+            ...(enrichedCoalescedConsult ? { halakhicConsultation: enrichedCoalescedConsult } : {}),
             ...(externalThinkerDetection.detected ? { externalThinkerDetection } : {}),
           },
           halakhicValidation
@@ -2693,7 +2759,7 @@ REGLAS DE REFERENCIAS CANÓNICAS PARA SEFARIA SEGÚN LA METODOLOGÍA ACTIVA Y CO
 - Si la consulta trata sobre el Imperativo Categórico de Kant frente a la ética judía: selecciona "Kiddushin 31a", "Deuteronomy 30:14", "Yoma 85b", "Deuteronomy 6:18", "Sanhedrin 56a", "Lamentations Rabbah 2:13".
 - Si la consulta trata sobre el Mashíaj (Mesías), su naturaleza humana (no divina), por qué lo esperamos y cuál es su misión: selecciona fuentes como "Isaiah 11:1", "Isaiah 11:2", "Isaiah 11:9", "Isaiah 2:4", "Deuteronomy 30:3", "Sanhedrin 98a".
 - Si la consulta trata sobre el Halel (הַלֵּל, Salmos 113–118, Halel Shalem vs. Jatsi Halel, Rosh Jódesh de 1 o 2 días según si el mes que termina tiene 29 días [Jaser] o 30 días [Malé], Pesaj, Sucot, Janucá, su institución profética o sus leyes halájicas): selecciona exclusivamente fuentes halájicas, talmúdicas y del Shulján Aruj como "Pesachim 117a", "Arakhin 10a", "Taanit 28b", "Shulchan Arukh, Orach Chayim 422:2", "Shulchan Arukh, Orach Chayim 427:1", "Mishneh Torah, Sanctification of the New Moon 8:4", "Mishneh Torah, Megillah and Chanukah 3:6". PROHIBIDO mencionar a Kant o filósofos externos.
-- Si la consulta trata sobre leyes (Halajá), cumplimiento práctico, el Shulján Aruj, o comparaciones de costumbres dentro del judaísmo (Minhag y Núsaj: Sefardí / Edot HaMizraj vs. Ashkenazí vs. Jasídico vs. Teimaní, Mejaber vs. Ramá): DEBES incluir referencias exactas del **Shulján Aruj** en Sefaria (ej. "Shulchan Arukh, Orach Chayim 1:1", "Shulchan Arukh, Orach Chayim 68:1", "Shulchan Arukh, Orach Chayim 422:2", "Shulchan Arukh, Orach Chayim 453:1", "Shulchan Arukh, Orach Chayim 128:44", "Shulchan Arukh, Orach Chayim 581:1", "Shulchan Arukh, Yoreh De'ah 214:1", junto con "Pesachim 50b" o "Taanit 28b").
+- Si la consulta trata sobre leyes (Halajá), cumplimiento práctico, el Shulján Aruj, rezos (Tefilá, Shemá, Amidá, Berajot, Talit, Tefilín, Netilat Yadáim, Birkat HaMazón), festividades (Shabat, Pésaj, Shavuot, Rosh Hashaná, Yom Kipur, Sucot, Janucá, Purim, Rosh Jódesh) o Kashrut (carne y leche / Basar BeJalav, Taarovet, Tevilat Kelim, Hagualá, Bedikat Tolaim, Bishul Akum), o comparaciones de costumbres dentro del judaísmo (Minhag y Núsaj: Sefardí / Edot HaMizraj vs. Ashkenazí vs. Jasídico vs. Teimaní, Mejaber vs. Ramá): DEBES incluir referencias exactas del **Shulján Aruj** (*Oraj Jaim* y *Yoré Deá*) en Sefaria (ej. "Shulchan Arukh, Orach Chayim 1:1", "Shulchan Arukh, Orach Chayim 68:1", "Shulchan Arukh, Orach Chayim 90:9", "Shulchan Arukh, Orach Chayim 98:1", "Shulchan Arukh, Orach Chayim 242:1", "Shulchan Arukh, Orach Chayim 422:2", "Shulchan Arukh, Orach Chayim 453:1", "Shulchan Arukh, Orach Chayim 671:1", "Shulchan Arukh, Yoreh De'ah 87:1", "Shulchan Arukh, Yoreh De'ah 89:1", "Shulchan Arukh, Yoreh De'ah 120:1", "Shulchan Arukh, Yoreh De'ah 214:1") y OMITIR por completo toda filosofía externa o comparativa.
 - Si la metodología principal o alguna complementaria incluye "MESILAT_YESHARIM_SISTEMATICO": Incluye al menos 1 referencia exacta de "Mesillat Yesharim <capítulo>:<párrafo>" junto con sus versículos de apoyo en el Tanaj o Pirkei Avot.
 - Si incluye "PIRKE_AVOT_EXEGETICO": Incluye la Mishná exacta de "Pirkei Avot <capítulo>:<mishná>".
 - Si incluye "MUSAR_TRANSFORMATIVO": Incluye la fuente ética precisa en "Pirkei Avot", "Mesillat Yesharim", "Proverbs", "Psalms" o el Tanaj.
@@ -2709,7 +2775,9 @@ CUATRO CLAVES TEOLÓGICAS OBLIGATORIAS QUE DEBES ADAPTAR AL TEMA Y METODOLOGÍA:
 4. Dimensión Interior (Interiorización del mandato en Deuteronomio 30:14, Pirké Avot 2:4 y Rambam en Shemoná Perakim cap. 6).`;
 
     const forcedThinkerPromptDirective = halakhicValidation.externalPhilosophyInjectionDisabled
-      ? halakhicValidation.systemPromptGuard
+      ? halakhicConsultation.active
+        ? `${halakhicValidation.systemPromptGuard}${halakhicConsultation.systemPromptDirective}`
+        : halakhicValidation.systemPromptGuard
       : externalThinkerDetection.detected
       ? `\n\n[MÓDULO DEL PIPELINE ACTIVO — DETECTOR DE PENSADOR EXTERNO Y BÚSQUEDA EXEGÉTICA FORZADA]:
 - Pensador externo detectado: ${externalThinkerDetection.thinkerName} (${externalThinkerDetection.eraAndTradition})
@@ -2881,8 +2949,14 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
     parsed.resolvedTone = p1ToneEval.resolvedTone;
     parsed.toneAdvisory = p1ToneEval.advisoryReason;
 
-    // Pipeline Module Override: When an external philosopher/thinker is detected, force the canonical Sefaria exegetical search
-    if (externalThinkerDetection.detected) {
+    // Pipeline Module Override: When Halakhic Shulchan Arukh consultation or external thinker detector is active, merge exact Sefaria refs
+    if (halakhicConsultation.active) {
+      parsed.sefariaReferences = mergeHalakhicRefsWithPredictions(
+        halakhicConsultation,
+        parsed.sefariaReferences,
+        6
+      );
+    } else if (externalThinkerDetection.detected) {
       parsed.sefariaReferences = mergeForcedThinkerRefsWithPredictions(
         externalThinkerDetection,
         parsed.sefariaReferences,
@@ -2897,6 +2971,13 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
       externalSourcesPromise,
     ]);
     parsed.preVerifiedSources = preVerifiedSources;
+    parsed.halakhicValidation = halakhicValidation;
+    if (halakhicConsultation.active) {
+      parsed.halakhicConsultation = enrichHalakhicConsultationWithVerifiedSources(
+        halakhicConsultation,
+        preVerifiedSources
+      );
+    }
     if (
       !halakhicValidation.externalPhilosophyInjectionDisabled &&
       (externalThinkerDetection.detected ||
@@ -2925,6 +3006,14 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
       const fallbackStage1Ms = Date.now() - phase1StartedAt;
     const isModim = /\bmodim(?:\s+de[- ]?raban[aá]n|\s+anajnu)?\b/i.test(query);
     const isJesed = /j[eé]sed|chesed|bondad|[aá]rbol de la vida|sefir/i.test(query);
+    const isFocusedBranchHalakha =
+      halakhicConsultation.active &&
+      halakhicConsultation.directQuotes.length > 0 &&
+      !isHalelTopic &&
+      !/\b(minhag|minhaguim|n[uú]saj|nusjaot|sefard[ií].*ashkenaz[ií]|comparaci[oó]n.*costumbres)\b/i.test(
+        query
+      );
+    const primarySaQuote = halakhicConsultation.directQuotes[0];
     const fallbackRefs = isJewishMovementsAndMessianicBoundaryTopic
       ? [
           {
@@ -3140,6 +3229,21 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
           { ref: 'Shulchan Arukh, Orach Chayim 427:1', rationale: 'Regla halájica y calendárica de por qué Rosh Jódesh es de 1 día (cuando el mes que termina tiene 29 días, Jódesh Jaser) o de 2 días (cuando el mes que termina tiene 30 días, Jódesh Malé: día 30 del mes saliente + día 1 del mes nuevo)' },
           { ref: 'Mishneh Torah, Sanctification of the New Moon 8:4', rationale: 'Explicación de Maimónides (Hiljot Kidush HaJódesh 8:4) sobre Rosh Jódesh de 1 o 2 días según los días del mes que termina y la observancia en ambos días' },
         ]
+      : isFocusedBranchHalakha
+      ? mergeHalakhicRefsWithPredictions(
+          halakhicConsultation,
+          [
+            {
+              ref: 'Taanit 28b',
+              rationale: 'Principio halájico: Minhag avoteijem be-yadeijem (la costumbre de nuestros ancestros en nuestras manos)',
+            },
+            {
+              ref: "Shulchan Arukh, Yoreh De'ah 214:1",
+              rationale: 'Fuerza normativa de la práctica comunitaria conforme al Shulján Aruj',
+            },
+          ],
+          6
+        )
       : isShulchanArukhOrMinhagNusachTopic || isInternalHalakhaTopic
       ? [
           { ref: 'Shulchan Arukh, Orach Chayim 1:1', rationale: 'Apertura del Shulján Aruj: articulación entre la ley base de Rabí Yosef Karo (El Mejaber, tradición sefardí) y la Mapá del Ramá (Rabí Moshé Isserles, tradición ashkenazí)' },
@@ -3162,7 +3266,9 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
           { ref: 'Deuteronomy 30:19', rationale: 'Libre albedrío y elección consciente de la vida y el bien' },
           { ref: 'Psalms 104:24', rationale: 'Sabiduría divina plasmada en el orden de la creación' },
         ];
-    const effectiveFallbackRefs = externalThinkerDetection.detected
+    const effectiveFallbackRefs = halakhicConsultation.active
+      ? mergeHalakhicRefsWithPredictions(halakhicConsultation, fallbackRefs, 6)
+      : externalThinkerDetection.detected
       ? mergeForcedThinkerRefsWithPredictions(externalThinkerDetection, fallbackRefs, 6)
       : fallbackRefs;
     const sefStartedAt = Date.now();
@@ -3172,12 +3278,22 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
     ]);
     const fallbackStage2Ms = Date.now() - sefStartedAt;
     const hasComparativeContrast =
-      externalThinkerDetection.detected ||
-      externalSources.length > 0 ||
-      metodologia === 'FILOSOFIA_CONTRASTIVA' ||
-      isComparativeTopic;
+      !halakhicValidation.externalPhilosophyInjectionDisabled &&
+      (externalThinkerDetection.detected ||
+        externalSources.length > 0 ||
+        metodologia === 'FILOSOFIA_CONTRASTIVA' ||
+        isComparativeTopic);
     const fallbackPhase1: any = {
       ...(externalThinkerDetection.detected ? { externalThinkerDetection } : {}),
+      halakhicValidation,
+      ...(halakhicConsultation.active
+        ? {
+            halakhicConsultation: enrichHalakhicConsultationWithVerifiedSources(
+              halakhicConsultation,
+              preVerifiedSources
+            ),
+          }
+        : {}),
       title: isJewishMovementsAndMessianicBoundaryTopic
         ? 'Corrientes Dentro del Judaísmo (Jasidismo Jabad y Breslev, Ortodoxia, Reformismo) y la Frontera Teológica: Por Qué los «Judíos Mesiánicos» No Son Judíos sino Cristianos Evangélicos'
         : isAfterlifeSoulDestinyTopic
@@ -3198,6 +3314,8 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
         ? 'Modim de-Rabanán y el Motivo Creacional (יוֹצֵר בְּרֵאשִׁית)'
         : isHalelTopic
         ? 'El Halel (הַלֵּל) en la Halajá, el Talmud y el Shulján Aruj: Institución Profética, Halel Shalem frente a Jatsi Halel y Minhag Sefardí vs. Ashkenazí'
+        : isFocusedBranchHalakha
+        ? cleanTopicLabel
         : isShulchanArukhOrMinhagNusachTopic
         ? 'El Shulján Aruj (שֻׁלְחָן עָרוּךְ), el Cumplimiento de la Halajá y las Comparaciones de Minhag (מִנְהָג) y Núsaj (נוּסַח) Dentro del Judaísmo: Mejaber frente al Ramá'
         : isJesed
@@ -3221,6 +3339,8 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
         ? 'מוֹדִים אֲנַחְנוּ לָךְ שֶׁאַתָּה הוּא ה׳ אֱלֹהֵינוּ... יוֹצֵר בְּרֵאשִׁית'
         : isHalelTopic
         ? 'הַלְלוּיָהּ הַלְלוּ עַבְדֵי ה׳ הַלְלוּ אֶת־שֵׁם ה׳ · זֶה־הַיּוֹם עָשָׂה ה׳ נָגִילָה וְנִשְׂמְחָה בוֹ'
+        : isFocusedBranchHalakha && primarySaQuote
+        ? primarySaQuote.briefHebrewQuote
         : isShulchanArukhOrMinhagNusachTopic
         ? 'שְׁמַע בְּנִי מוּסַר אָבִיךָ וְאַל־תִּטֹּשׁ תּוֹרַת אִמֶּךָ · מִנְהַג אֲבוֹתֵיהֶם בִּידֵיהֶם · וְאֵין לְשַׁנּוֹת מִנְהַג הַמָּקוֹם וְנוּסְחָהּ'
         : isJesed
@@ -3244,6 +3364,8 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
         ? 'Modim anajnu laj she-Atá Hu Hashem Eloheinu... Yotzer Bereshit'
         : isHalelTopic
         ? 'Haleluyá halelú avdei Hashem halelú et-Shem Hashem · Ze ha-yom asá Hashem naguila ve-nismejá vo'
+        : isFocusedBranchHalakha && primarySaQuote
+        ? `${primarySaQuote.simanSeifLabel} · ${primarySaQuote.topicLabel}`
         : isShulchanArukhOrMinhagNusachTopic
         ? 'Shemá bení musar avija ve-al titosh Torat imeja · Minhag avoteijem be-yadeijem · Ve-ein leshanot minhag ha-makom ve-nusjá'
         : isJesed
@@ -3267,6 +3389,8 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
         ? 'Te agradecemos a Ti, pues Tú eres el Eterno nuestro Dios... Formador de la Creación (Yotzer Bereshit).'
         : isHalelTopic
         ? '«¡Haleluyá! Alabad, siervos de Hashem, alabad el Nombre de Hashem» (Salmos 113:1) · «Este es el día que hizo Hashem; nos gozaremos y alegraremos en él» (Salmos 118:24).'
+        : isFocusedBranchHalakha && primarySaQuote
+        ? `${primarySaQuote.simanSeifLabel}: «${primarySaQuote.briefSpanishQuote}»`
         : isShulchanArukhOrMinhagNusachTopic
         ? '«Escucha, hijo mío, la instrucción de tu padre, y no abandones la enseñanza (Minhag) de tu madre» (Proverbios 1:8; Pesajim 50b) · «Conservan la costumbre de sus ancestros en sus manos» (Taanit 28b) · «Y no se debe alterar el Minhag del lugar ni su Núsaj» (Shulján Aruj, Oraj Jaim 68:1).'
         : isJesed
@@ -3290,6 +3414,8 @@ Genera un 'title' conceptual limpio (sin repetir la pregunta cruda del usuario),
         ? 'Talmud Bavli Sotá 40a · Yerushalmi Berajot 1:5 · Repetición de la Amidá'
         : isHalelTopic
         ? 'Salmos 113–118 (Halel HaMitzrí) · Pesajim 117a · Taanit 28b · Arjin 10a · Rambam, Hiljot Megilá ve-Janucá 3:1–6 · Shulján Aruj Oraj Jaim 422 y 644'
+        : isFocusedBranchHalakha
+        ? `Corpus Halájico Interno · ${halakhicConsultation.consultedBranchLabels.join(' · ')} · Shulján Aruj (Sin filosofía externa)`
         : isShulchanArukhOrMinhagNusachTopic
         ? 'Shulján Aruj (Oraj Jaim 1:1, 68:1, 128:44, 422:2, 453:1, 581:1; Yoré Deá 214:1) · Rabí Yosef Karo (Mejaber) y Rabí Moshé Isserles (Ramá) · Mishná Berurá y Kaf HaJaim · Pesajim 50b y Taanit 28b · Comparación de Minhag y Núsaj (Sefarad, Ashkenaz, Ari/Jasídico y Teimán)'
         : isJesed
@@ -4413,6 +4539,7 @@ app.post('/api/generate-derasha', async (req, res) => {
     }
 
     const halakhicValidation = validatePurelyHalakhicQuery(query);
+    const halakhicConsultation = consultHalakhicShulchanArukhModule(query, halakhicValidation);
     const requestedTone = normalizeDerashaTone(tono_homiletico);
     const toneEval = resolveDerashaTone(
       requestedTone,
@@ -4478,17 +4605,15 @@ app.post('/api/generate-derasha', async (req, res) => {
       complementaryMethodologies
     );
 
-    const systemInstruction = `Eres un asistente rabínico y pedagógico especializado en redactar drashot estructuradas y profundas.
-${STRICT_JEWISH_SOURCES_COVENANT}
-
-Recibes cinco parámetros principales:
-1. "consulta_o_tema": "${query}"
-2. "metodologia_principal": "${metodologia}"
-3. "metodologias_complementarias": ${JSON.stringify(complementaryMethodologies)}
-4. "duracion": "${duracion}"
-5. "audiencia_o_tono": "${audienciaOTono}"
-
-REGLA PEDAGÓGICA FUNDAMENTAL — CÓMO RESPONDER PREGUNTAS Y ANÁLISIS FILOSÓFICOS COMPARATIVOS SIN REPETIRLOS COMO CITAS:
+    const comparativePromptSection = halakhicValidation.externalPhilosophyInjectionDisabled
+      ? `REGLA HALÁJICA ESTRICTA — MÓDULO DEL SHULJÁN ARUJ (OMISIÓN TOTAL DE FILOSOFÍA EXTERNA):
+1. Esta consulta pertenece a la Halajá normativa (${halakhicConsultation.consultedBranchLabels.join(' · ') || 'Halajá'}). Está TERMINANTEMENTE PROHIBIDO inyectar filosofía externa o comparativa (ninguna mención a Kant, Platón, Cicerón, Aristóteles, Budismo, Nirvana, Valhalla ni contrastes filosóficos externos).
+2. PROHIBIDO REPETIR LA PREGUNTA ENTRE COMILLAS («...»): Usa siempre un título conceptual limpio (ej. "${cleanTopicLabel}").
+3. CITAS BREVES Y DIRECTAS DEL SHULJÁN ARUJ:
+   - Incorpora como fuente central el **Shulján Aruj (שֻׁלְחָן עָרוּךְ)** en las secciones consultadas (*Oraj Jaim* para leyes de Rezos y Festividades; *Yoré Deá* para leyes de Kashrut), integrando **citas breves y directas** con su **Simán y Seif exactos**, texto breve en hebreo/español y el diálogo entre **Rabí Yosef Karo (*El Mejaber*, tradición Sefardí)** y **Rabí Moshé Isserles (*El Ramá — HaMapá*, tradición Ashkenazí)**.
+   - Si el tema involucra **Halel** o **Rosh Jódesh**, explica explícitamente cuándo dura 1 día (mes saliente de 29 días, *Jódesh Jaser*) o 2 días (mes saliente de 30 días, *Jódesh Malé*: día 30 del mes saliente + día 1 del mes entrante, según *Shulján Aruj, Oraj Jaim 427:1* y *Rambam Hiljot Kidush HaJódesh 8:4*).
+   ${halakhicConsultation.active ? halakhicConsultation.systemPromptDirective : halakhicValidation.systemPromptGuard}`
+      : `REGLA PEDAGÓGICA FUNDAMENTAL — CÓMO RESPONDER PREGUNTAS Y ANÁLISIS FILOSÓFICOS COMPARATIVOS SIN REPETIRLOS COMO CITAS:
 1. DISTINCIÓN ENTRE PREGUNTA Y CITA: Cuando el usuario ingresa una pregunta o solicita un contraste filosófico/comparativo en lenguaje natural (por ejemplo: el Imperativo Categórico de Kant, la Alegoría de la Caverna de Platón, Cicerón, la Iluminación en el Budismo frente al Judaísmo, o el Destino de las Almas: Olam HaBá frente a Nirvana, Valhalla, Cielo e Infierno y los requisitos para acceder a cada uno), su texto NO es una cita bíblica ni talmúdica.
 2. PROHIBIDO REPETIR LA PREGUNTA ENTRE COMILLAS («...»): JAMÁS repitas el texto crudo de la pregunta del usuario entre comillas («...») como si fuera una cita solemne o un título. Usa siempre un título conceptual limpio (ej. "${cleanTopicLabel}").
 3. CONTRASTE EXEGÉTICO FORMAL ANTE PREGUNTAS COMPARATIVAS (KANT, PLATÓN, CICERÓN, BUDISMO/ILUMINACIÓN, DESTINO DE LAS ALMAS / OLAM HABÁ vs. NIRVANA, VALHALLA, CIELO E INFIERNO, Y CORRIENTES DEL JUDAÍSMO vs. «JUDÍOS MESIÁNICOS»):
@@ -4507,14 +4632,31 @@ REGLA PEDAGÓGICA FUNDAMENTAL — CÓMO RESPONDER PREGUNTAS Y ANÁLISIS FILOSÓF
       5) **Si la consulta aborda leyes (Halajá), el Halel, Rosh Jódesh, cumplimiento práctico, el Shulján Aruj, o comparaciones de costumbres dentro del judaísmo (Minhag y Núsaj)**:
          - Incorpora como fuente central el **Shulján Aruj (שֻׁלְחָן עָרוּךְ)** en sus 4 secciones (*Oraj Jaim*, *Yoré Deá*, *Even HaEzer* y *Joshen Mishpat*), mostrando el diálogo entre **Rabí Yosef Karo (*El Mejaber*, tradición Sefardí / Edot HaMizraj)** y **Rabí Moshé Isserles (*El Ramá — HaMapá*, tradición Ashkenazí)** junto con sus comentaristas (*Mishná Berurá*, *Ben Ish Jai*, *Kaf HaJaim*, *Yalkut Yosef*, *Shulján Aruj HaRav*).
          - Si el tema involucra el **Halel** o **Rosh Jódesh**, DEBES explicar explícitamente por qué **Rosh Jódesh es de 1 o de 2 días dependiendo de cuántos días tiene el mes que termina** (*Talmud Rosh Hashaná 19b*, *Arjín 8b–9b*, *Rambam Hiljot Kidush HaJódesh 8:4* y *Shulján Aruj, Oraj Jaim 427:1*): cuando el mes que termina tiene **29 días (*Jódesh Jaser* / mes deficiente)**, Rosh Jódesh dura **1 solo día** (el día 1 del mes nuevo); cuando el mes que termina tiene **30 días (*Jódesh Malé* / mes pleno)**, Rosh Jódesh dura **2 días** (el **día 30 del mes que termina** como 1.er día de Rosh Jódesh + el **día 1 del nuevo mes entrante** como 2.º día de Rosh Jódesh, desde el cual se cuentan las fechas del mes), recitándose en **ambos días** el Medio Halel (*Jatsi Halel*), *Yaalé VeYavó*, lectura de la Torá y *Musaf*.
-         - Desglosa los matices entre **Halajá (ley normativa)**, **Minhag (costumbre comunitaria ancestral: «Minhag avoteijem be-yadeijem» en *Taanit 28b*, «Minhag Yisrael Torá hi» en *Yoré Deá 214:1* y *Pesajim 50b*)** y **Núsaj (rito y formulación litúrgica en *Oraj Jaim 68:1*: Núsaj Sefarad / Edot HaMizraj, Núsaj Ashkenaz, Núsaj Sefard/Ari Jasídico y Núsaj Teimaní)** para realizar comparaciones internas de costumbres dentro del judaísmo sin invocar jamás a filósofos externos.
+         - Desglosa los matices entre **Halajá (ley normativa)**, **Minhag (costumbre comunitaria ancestral: «Minhag avoteijem be-yadeijem» en *Taanit 28b*, «Minhag Yisrael Torá hi» en *Yoré Deá 214:1* y *Pesajim 50b*)** y **Núsaj (rito y formulación litúrgica en *Oraj Jaim 68:1*: Núsaj Sefarad / Edot HaMizraj, Núsaj Ashkenaz, Núsaj Sefard/Ari Jasídico y Núsaj Teimaní)** para realizar comparaciones internas de costumbres dentro del judaísmo sin invocar jamás a filósofos externos.`;
+
+    const veracitySourcesInstruction = halakhicValidation.externalPhilosophyInjectionDisabled
+      ? `REGLA DE ORO DE VERACIDAD Y USO EXCLUSIVO DE FUENTES INTERNAS Y SHULJÁN ARUJ:
+Tienes a tu disposición los TEXTOS REALES de las **Fuentes Internas de la Torá y del Shulján Aruj** (descargados de la API de Sefaria y del módulo halájico interno). Integra directamente **citas breves y directas del Shulján Aruj** (*Oraj Jaim* y/o *Yoré Deá*) con su Simán y Seif precisos. OMITIR COMPLETAMENTE toda inyección o mención de filosofía externa o comparativa.`
+      : `REGLA DE ORO DE VERACIDAD Y USO DE FUENTES INTERNAS Y EXTERNAS:
+Tienes a tu disposición los TEXTOS REALES de las **Fuentes Internas de la Torá** (descargados de la API de Sefaria) y, cuando se trata de un estudio comparativo, las **Fuentes Externas Filosóficas y Clásicas** (Kant, Platón, Cicerón, Canon Pali sobre Iluminación/Nirvana, Eddas sobre Valhalla, Cristología Conciliar y la Disputa de Barcelona de 1263). Cita ambas con precisión para fundamentar el contraste exegético formal.`;
+
+    const systemInstruction = `Eres un asistente rabínico y pedagógico especializado en redactar drashot estructuradas y profundas.
+${STRICT_JEWISH_SOURCES_COVENANT}
+
+Recibes cinco parámetros principales:
+1. "consulta_o_tema": "${query}"
+2. "metodologia_principal": "${metodologia}"
+3. "metodologias_complementarias": ${JSON.stringify(complementaryMethodologies)}
+4. "duracion": "${duracion}"
+5. "audiencia_o_tono": "${audienciaOTono}"
+
+${comparativePromptSection}
 
 ${methodologyRules}
 
 ${durationAndComplementaryRules}
 
-REGLA DE ORO DE VERACIDAD Y USO DE FUENTES INTERNAS Y EXTERNAS:
-Tienes a tu disposición los TEXTOS REALES de las **Fuentes Internas de la Torá** (descargados de la API de Sefaria) y, cuando se trata de un estudio comparativo, las **Fuentes Externas Filosóficas y Clásicas** (Kant, Platón, Cicerón, Canon Pali sobre Iluminación/Nirvana, Eddas sobre Valhalla, Cristología Conciliar y la Disputa de Barcelona de 1263). Cita ambas con precisión para fundamentar el contraste exegético formal.
+${veracitySourcesInstruction}
 
 SALIDA OBLIGATORIA:
 1. 'derashaTitle': Título inspirador, conceptual y claro de la drashá que destile la esencia del tema (NUNCA pegues ni cites la pregunta cruda del usuario, ni la encierres entre comillas «...» o "...").
@@ -4538,7 +4680,9 @@ SALIDA OBLIGATORIA:
     );
 
     const externalSourcesPromptBlock = halakhicValidation.externalPhilosophyInjectionDisabled
-      ? halakhicValidation.systemPromptGuard
+      ? halakhicConsultation.active
+        ? `${halakhicValidation.systemPromptGuard}${halakhicConsultation.systemPromptDirective}`
+        : halakhicValidation.systemPromptGuard
       : activeExternalSources.length > 0
         ? `\n- Fuentes Externas Consultadas (Filosofía y Tradiciones Clásicas para informar el contraste): ${JSON.stringify(
             activeExternalSources.map((e: any) => ({
@@ -4770,6 +4914,13 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
     parsed.tonoHomiletico = toneEval.requestedTone;
     parsed.resolvedTone = toneEval.resolvedTone;
     parsed.toneAdvisory = toneEval.advisoryReason;
+    parsed.halakhicValidation = halakhicValidation;
+    if (halakhicConsultation.active) {
+      parsed.halakhicConsultation = enrichHalakhicConsultationWithVerifiedSources(
+        halakhicConsultation,
+        verifiedSources
+      );
+    }
     if (activeExternalSources.length > 0) {
       parsed.externalSources = activeExternalSources;
     }
@@ -4935,6 +5086,16 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
     const isModim = /\bmodim(?:\s+de[- ]?raban[aá]n|\s+anajnu)?\b/i.test(query);
 
     const fallbackHalakhicValidation = validatePurelyHalakhicQuery(query);
+    const fallbackHalakhicConsultation = consultHalakhicShulchanArukhModule(
+      query,
+      fallbackHalakhicValidation
+    );
+    const enrichedFallbackConsultation = fallbackHalakhicConsultation.active
+      ? enrichHalakhicConsultationWithVerifiedSources(fallbackHalakhicConsultation, verifiedSources)
+      : undefined;
+    const isExplicitMinhagNusachComparison = /\b(minhag|minhaguim|n[uú]saj|nusjaot|sefard[ií].*ashkenaz[ií]|comparaci[oó]n.*costumbres)\b/i.test(
+      query
+    );
     const fallbackRequestedTone = normalizeDerashaTone(tono_homiletico);
     const fallbackToneEval = resolveDerashaTone(
       fallbackRequestedTone,
@@ -4983,7 +5144,8 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       isMashiajTopic ||
       isModim ||
       isHalelTopic ||
-      isShulchanArukhOrMinhagNusachTopic;
+      (isShulchanArukhOrMinhagNusachTopic &&
+        (!fallbackHalakhicConsultation.active || isExplicitMinhagNusachComparison));
 
     const groundedTopicFallback = buildTopicGroundedExegeticAnalysis({
       query: rawInput,
@@ -4999,6 +5161,7 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       theologicalKeys,
       verifiedSources,
       resolvedTone: fallbackToneEval.resolvedTone,
+      halakhicConsultation: enrichedFallbackConsultation,
     });
 
     const fallbackPardes = isJewishMovementsAndMessianicBoundaryTopic
@@ -5375,7 +5538,8 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
               'El Halel educa al alma para reconocer la mano de Hashem tanto en los milagros completos de las festividades (Halel Shalem) como en los comienzos graduales de cada mes (Rosh Jódesh de 1 o 2 días).',
           },
         }
-      : isShulchanArukhOrMinhagNusachTopic
+      : isShulchanArukhOrMinhagNusachTopic &&
+        (!fallbackHalakhicConsultation.active || isExplicitMinhagNusachComparison)
       ? {
           pshat: {
             hebrewPillar: 'שֻׁלְחָן עָרוּךְ וְהַמַּפָּה',
@@ -5430,6 +5594,8 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
       duracion,
       audienciaOTono,
       derashaTitle: effectiveTitle,
+      halakhicValidation: fallbackHalakhicValidation,
+      ...(enrichedFallbackConsultation ? { halakhicConsultation: enrichedFallbackConsultation } : {}),
       ...(fallbackExternalSources.length > 0 ? { externalSources: fallbackExternalSources } : {}),
       ...(fallbackFormalContrast ? { formalContrast: fallbackFormalContrast } : {}),
       openingExordium: isJewishMovementsAndMessianicBoundaryTopic
@@ -5452,7 +5618,8 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
         ? '¿Por qué cuando la congregación se inclina junto al Jazán en el Modim de-Rabanán proclama explícitamente a Dios como «Yotzer Bereshit» (Formador de la Creación), mientras que en el Modim silencioso de la Amidá este motivo creacional está ausente? A través del método histórico-filológico de la Wissenschaft des Judentums, la crítica textual de la Guenizá de El Cairo, el análisis redaccional de Sotá 40a y la exégesis teológica comparada, desentrañamos la arquitectura profunda de esta disparidad litúrgica.'
         : isHalelTopic
         ? 'Estudio halájico, calendárico y litúrgico sobre el Halel (Salmos 113–118) y Rosh Jódesh desde las fuentes internas del canon judío: su institución por los Profetas (Pesajim 117a), los dieciocho días de Halel Completo (Arjín 10a), el Medio Halel en Rosh Jódesh (Taanit 28b: «Minhag avoteijem be-yadeijem»), por qué Rosh Jódesh es de 1 día (cuando el mes que termina tiene 29 días, Jódesh Jaser) o de 2 días (cuando el mes que termina tiene 30 días, Jódesh Malé: el día 30 del mes saliente + el día 1 del mes entrante, según Rambam Hiljot Kidush HaJódesh 8:4 y Shulján Aruj Oraj Jaim 427:1), y la diferencia en el Shulján Aruj (Oraj Jaim 422:2) entre el Mejaber (Sefardí, sin berajá) y el Ramá (Ashkenazí, con berajá).'
-        : isShulchanArukhOrMinhagNusachTopic
+        : isShulchanArukhOrMinhagNusachTopic &&
+          (!fallbackHalakhicConsultation.active || isExplicitMinhagNusachComparison)
         ? 'Estudio halájico y comparativo interno sobre el Shulján Aruj (שֻׁלְחָן עָרוּךְ), el cumplimiento práctico de las leyes y los matices de Minhag (מִנְהָג) y Núsaj (נוּסַח) dentro del judaísmo: 1) Cómo dialogan en el Shulján Aruj la «Mesa» de Rabí Yosef Karo (El Mejaber · tradición Sefardí / Edot HaMizraj) y el «Mantel» (HaMapá) de Rabí Moshé Isserles (El Ramá · tradición Ashkenazí) a través de sus cuatro secciones (Oraj Jaim, Yoré Deá, Even HaEzer y Joshen Mishpat); 2) La distinción normativa entre Halajá (ley común), Minhag (costumbre comunitaria ancestral con fuerza vinculante: «Minhag Yisrael Torá hi», Pesajim 50b, Taanit 28b y Yoré Deá 214:1) y Núsaj (rito y formulación litúrgica en Oraj Jaim 68:1: Sefarad/Edot HaMizraj, Ashkenaz, Sefard/Ari Jasídico y Teimán); y 3) Los casos paradigmáticos de comparación de costumbres en el Shulján Aruj (la berajá del Medio Halel en OC 422:2, Birkat Kohanim en OC 128:44, Selijot en Elul en OC 581:1, Tefilín en Jol HaMoed en OC 31:2 y Kitniyot en Pésaj en OC 453:1).'
         : groundedTopicFallback.openingExordium,
       methodologySections: baseFallbackSections,
@@ -5624,19 +5791,41 @@ app.post('/api/expand-derasha', async (req, res) => {
       isAfterlifeSoulDestinyTopic,
     } = normalizeUserStudyQuery(combinedQuery);
 
-    const activeExternalSources =
-      Array.isArray(derashaContext?.externalSources) && derashaContext.externalSources.length > 0
-        ? derashaContext.externalSources
-        : isComparativeTopic
-        ? await fetchExternalComparativeSources(combinedQuery)
-        : [];
-    const activeFormalContrast =
-      derashaContext?.formalContrast ||
-      (isComparativeTopic || activeExternalSources.length > 0
-        ? buildDefaultFormalExegeticalContrast(combinedQuery, activeExternalSources)
-        : undefined);
+    const combinedHalakhicValidation = validatePurelyHalakhicQuery(combinedQuery);
+    const omitExternalPhilosophy =
+      combinedHalakhicValidation.externalPhilosophyInjectionDisabled ||
+      Boolean(
+        derashaContext?.halakhicValidation?.externalPhilosophyInjectionDisabled ||
+          derashaContext?.halakhicConsultation?.externalPhilosophyOmitted
+      );
+    const expandHalakhicConsultation = omitExternalPhilosophy
+      ? consultHalakhicShulchanArukhModule(combinedQuery, {
+          ...combinedHalakhicValidation,
+          isPurelyHalakha: true,
+          isPurelyHalakhic: true,
+          externalPhilosophyInjectionDisabled: true,
+        } as any)
+      : consultHalakhicShulchanArukhModule(combinedQuery, combinedHalakhicValidation);
+
+    const activeExternalSources = omitExternalPhilosophy
+      ? []
+      : Array.isArray(derashaContext?.externalSources) && derashaContext.externalSources.length > 0
+      ? derashaContext.externalSources
+      : isComparativeTopic
+      ? await fetchExternalComparativeSources(combinedQuery)
+      : [];
+    const activeFormalContrast = omitExternalPhilosophy
+      ? undefined
+      : derashaContext?.formalContrast ||
+        (isComparativeTopic || activeExternalSources.length > 0
+          ? buildDefaultFormalExegeticalContrast(combinedQuery, activeExternalSources)
+          : undefined);
 
     const ai = getGenAIClient();
+
+    const expandRule2 = omitExternalPhilosophy
+      ? `2. Esta consulta trata sobre Halajá normativa (${expandHalakhicConsultation.consultedBranchLabels.join(' · ') || 'Shulján Aruj'}). Integra directamente **citas breves y directas del Shulján Aruj** (*Oraj Jaim* y/o *Yoré Deá*) con su Simán y Seif precisos, señalando los matices entre **El Mejaber (Rabí Yosef Karo)** y **El Ramá (Rabí Moshé Isserles)** cuando proceda. PROHIBIDO inyectar o mencionar filosofía externa o comparativa (ninguna referencia a Kant, Platón, Cicerón, Budismo, Nirvana o Valhalla).`
+      : `2. Si la pregunta o el estudio involucra un **contraste comparativo** (por ejemplo: caracterizar el Mesías del cristianismo para desglosar sus diferencias con el Mashíaj del judaísmo, Imperativo Categórico de Kant, Alegoría de la Caverna de Platón, Cicerón, Iluminación en el Budismo frente al Judaísmo, o el Destino de las Almas: *Olam HaBá* frente a *Nirvana*, *Valhalla*, Cielo e Infierno y sus requisitos de acceso), utiliza las **Fuentes Externas** suministradas para informar la comparación y realiza el **Contraste Exegético Formal** con las **Fuentes Internas de la Torá** (analizando la *Universalidad frente a la Especificidad del Mandamiento* y la *Distinción entre Fuentes Internas de la Torá y Fuentes Externas* según *Eijá Rabá 2:13*).`;
 
     const systemInstruction = `Eres un maestro Darshán, filólogo hebraico y exégeta talmúdico, filosófico y cabalístico de máxima erudición.
 ${STRICT_JEWISH_SOURCES_COVENANT}
@@ -5644,10 +5833,14 @@ El estudiante está continuando y profundizando un estudio (Derashá) mediante u
 
 Tu respuesta debe ser:
 1. Directa, rigurosa, profunda y estructurada con subtítulos en Markdown (##, ###), viñetas y citas textuales.
-2. Si la pregunta o el estudio involucra un **contraste comparativo** (por ejemplo: caracterizar el Mesías del cristianismo para desglosar sus diferencias con el Mashíaj del judaísmo, Imperativo Categórico de Kant, Alegoría de la Caverna de Platón, Cicerón, Iluminación en el Budismo frente al Judaísmo, o el Destino de las Almas: *Olam HaBá* frente a *Nirvana*, *Valhalla*, Cielo e Infierno y sus requisitos de acceso), utiliza las **Fuentes Externas** suministradas para informar la comparación y realiza el **Contraste Exegético Formal** con las **Fuentes Internas de la Torá** (analizando la *Universalidad frente a la Especificidad del Mandamiento* y la *Distinción entre Fuentes Internas de la Torá y Fuentes Externas* según *Eijá Rabá 2:13*).
-3. Basada en fuentes tradicionales judías auténticas (Tanaj, Targum Onkelos, Mishná, Talmud Bavli y Yerushalmi, Midrash Rabá, Rishonim como Rashi, Rambam en *Hiljot Melajim* 11–12, Ramban en la *Disputa de Barcelona* de 1263 y Sforno, fuentes místicas como Zóhar y Tania, y maestros como el Ramjal, Rav Hirsch, Rav Soloveitchik, Rabino Jonathan Sacks y Rab Yehoshua Gordon).
+${expandRule2}
+3. Basada en fuentes tradicionales judías auténticas (Tanaj, Targum Onkelos, Mishná, Talmud Bavli y Yerushalmi, Midrash Rabá, *Shulján Aruj* [*Oraj Jaim* / *Yoré Deá*], Rishonim como Rashi, Rambam y Ramban, y comentaristas clásicos como *Mishná Berurá* y *Ben Ish Jai* / *Yalkut Yosef*).
 4. En 'relatedSefariaReferences', incluye únicamente referencias del canon judío en Sefaria.
-5. Incluye al final 3 preguntas sugeridas ('suggestedNextQuestions') que permitan al estudiante seguir profundizando la conversación.`;
+5. Incluye al final 3 preguntas sugeridas ('suggestedNextQuestions') que permitan al estudiante seguir profundizando la conversación.${
+      omitExternalPhilosophy
+        ? `\n${expandHalakhicConsultation.systemPromptDirective || combinedHalakhicValidation.systemPromptGuard}`
+        : ''
+    }`;
 
     const compactSections = Array.isArray(derashaContext?.methodologySections)
       ? derashaContext.methodologySections.map((s: any) => ({
@@ -5667,7 +5860,20 @@ Tu respuesta debe ser:
       compactVerifiedSourcesForPrompt(derashaContext?.verifiedSources || [])
     )}
 ${
-  activeExternalSources.length > 0
+  expandHalakhicConsultation.active
+    ? `- Módulo Halájico del Shulján Aruj Activo (${expandHalakhicConsultation.consultedBranchLabels.join(' · ')}): ${JSON.stringify(
+        expandHalakhicConsultation.directQuotes.map((q) => ({
+          ref: q.ref,
+          siman: q.simanSeifLabel,
+          hebrew: q.briefHebrewQuote,
+          spanish: q.briefSpanishQuote,
+          mejaberAndRamaNote: q.mejaberAndRamaNote,
+        }))
+      )}`
+    : ''
+}
+${
+  !omitExternalPhilosophy && activeExternalSources.length > 0
     ? `- Fuentes Externas Consultadas para el Contraste: ${JSON.stringify(activeExternalSources)}\n- Contraste Exegético Formal: ${JSON.stringify(activeFormalContrast || {})}`
     : ''
 }
@@ -5723,7 +5929,10 @@ Responde en formato JSON con 'answer' (en Markdown claro y profundo) y 'suggeste
       }
     );
 
-    const parsed = sanitizeStrictJewishObject(JSON.parse(response.text || '{}'));
+    const rawParsed = sanitizeStrictJewishObject(JSON.parse(response.text || '{}'));
+    const parsed = omitExternalPhilosophy
+      ? sanitizeHalakhicOutputFromExternalCitations(rawParsed, combinedHalakhicValidation)
+      : rawParsed;
     return res.json(parsed);
   } catch {
     const rawQ = `${req.body?.derashaContext?.query || ''} ${req.body?.question || ''}`.trim();
@@ -5738,9 +5947,47 @@ Responde en formato JSON con 'answer' (en Markdown claro y profundo) y 'suggeste
       isEnlightenmentBuddhismTopic,
       isAfterlifeSoulDestinyTopic,
     } = normalizeUserStudyQuery(rawQ);
+    const fbHalakhicVal = validatePurelyHalakhicQuery(rawQ);
+    const omitExt =
+      fbHalakhicVal.externalPhilosophyInjectionDisabled ||
+      Boolean(
+        req.body?.derashaContext?.halakhicValidation?.externalPhilosophyInjectionDisabled ||
+          req.body?.derashaContext?.halakhicConsultation?.externalPhilosophyOmitted
+      );
+    const fbHalakhicConsult = omitExt
+      ? consultHalakhicShulchanArukhModule(rawQ, {
+          ...fbHalakhicVal,
+          isPurelyHalakhic: true,
+          externalPhilosophyInjectionDisabled: true,
+        })
+      : consultHalakhicShulchanArukhModule(rawQ, fbHalakhicVal);
+
+    if ((omitExt || fbHalakhicConsult.active) && fbHalakhicConsult.directQuotes.length > 0) {
+      const quoteBullets = fbHalakhicConsult.directQuotes
+        .map(
+          (q) =>
+            `- **${q.simanSeifLabel}** (*${q.topicLabel}*): «${q.briefSpanishQuote}» (${q.briefHebrewQuote})${
+              q.mejaberAndRamaNote ? `\n  - *Mejaber y Ramá:* ${q.mejaberAndRamaNote}` : ''
+            }`
+        )
+        .join('\n');
+      return res.json({
+        answer: `### Profundización Halájica en el Shulján Aruj (${fbHalakhicConsult.consultedBranchLabels.join(' · ') || 'Halajá'})\n\nDe acuerdo con las leyes normativas codificadas en el **Shulján Aruj** (omitiendo toda filosofía externa o comparativa):\n\n${quoteBullets}\n\n#### Aplicación Práctica (Halajá le-Maasé)\n- Cada detalle del cumplimiento cotidiano se rige por las fuentes talmúdicas e internas codificadas por Rabí Yosef Karo (*El Mejaber*) y Rabí Moshé Isserles (*El Ramá*), adaptándose fielmente al *Minhag* comunitario correspondiente.`,
+        suggestedNextQuestions: [
+          '¿Qué diferencia práctica existe entre el dictamen del Mejaber (Sefardí) y la glosa del Ramá (Ashkenazí) en este Simán del Shulján Aruj?',
+          '¿Cuál es la fuente talmúdica directa en la que se basa Rabí Yosef Karo para esta Halajá?',
+          '¿Cómo detallan esta norma la Mishná Berurá y el Yalkut Yosef / Ben Ish Jai en la práctica contemporánea?',
+        ],
+        relatedSefariaReferences: fbHalakhicConsult.directQuotes.map((q) => ({
+          ref: q.ref,
+          rationale: `${q.simanSeifLabel} — ${q.topicLabel}`,
+        })),
+      });
+    }
+
     return res.json({
       answer: isJewishMovementsAndMessianicBoundaryTopic
-        ? `### Corrientes Internas del Judaísmo (Jasidismo Jabad y Breslov, Ortodoxia, Reformismo) y Por Qué los «Judíos Mesiánicos» NO son una Corriente Judía sino Cristianos Evangélicos\n\n#### 1. Pluralidad Interna dentro del Judaísmo\n- **Jasidismo (Jabad-Lubavitch y Breslov):** Fundado por el *Baal Shem Tov* (s. XVIII). **Jabad** (*Rabí Shneur Zalman de Liadi*, *Tanya*) enfatiza el gobierno del intelecto (*Jojmá, Biná, Daat*) sobre la emoción y la misión de crear una morada para Dios en lo inferior (*Dirá BeTajtonim*). **Breslov** (*Rabí Najmán de Breslov*, *Likutey Moharán*) enfatiza la alegría incondicional (*Mitzvá Guedolá Lihyot BeSimjá*, II:24), el clamor de *Azamrá* (I:282) y la plegaria personal espontánea (*Hitbodedut*).\n- **Ortodoxia Lituana (*Mitnagdim / Yeshivot*) y Moderna:** Centrada en el estudio analítico del Talmud (*Torá Lishmá*) y el *Shulján Aruj*.\n- **Judaísmo Conservador (*Masortí*) y Reformista:** Aunque debaten con la Ortodoxia sobre la historia de la Halajá, **permanecen dentro del umbral teológico judío** porque adoran exclusivamente al Único Dios incorpóreo del *Shemá Israel* (*Deuteronomio 6:4*) y rechazan toda idolatría o encarnación humana.\n\n#### 2. El Límite Infranqueable: Por Qué los «Judíos Mesiánicos» Son Cristianos Evangélicos\n- **Teología Trinitaria y Encarnacionista:** Adoran a Jesús como «Dios Hijo encarnado», violando la unicidad e incorporeidad absoluta de Dios (*Deuteronomio 6:4*; *Números 23:19*; *Maimónides, Hiljot Yesodei HaTorá 1:7* y *Hiljot Teshuvá 3:7*).\n- **Origen Histórico Bautista/Evangélico:** Nacieron de misiones protestantes como *«Jews for Jesus»* (1970, fundada por el ministro bautista Martin Rosen) y la *«Messianic Jewish Alliance»*, adoptando vocabulario hebreo (*Yeshúa*, *Talit*, *Kehilá*) como estrategia de proselitismo hacia judíos.\n- **Consenso Unánime Judío y Jurídico:** Todas las denominaciones judías (Ortodoxa, Jabad, Breslov, Sefardí, Conservadora y Reformista) y la Corte Suprema del Estado de Israel (*Caso Beresford*, HCJ 265/87, 1989) dictaminan unánimemente que el «judaísmo mesiánico» es otra religión: **cristianismo evangélico**.`
+        ? `### Corrientes Internas del Judaísmo (Jasidismo Jabad y Breslov, Ortodoxia, Reformismo) y Por Qué los «Judíos Mesiánicos» NO son una Corriente Judía sino Cristianos Evangélicos\n\n#### 1. Pluralidad Interna dentro del Judaísmo\n- **Jasidismo (Jabad-Lubavitch y Breslov):** Fundado por el *Baal Shem Tov* (s. XVIII). **Jabad** (*Rabí Shneur Zalman de Liadi*, *Tanya*) enfatiza el gobierno del intelecto (*Jojmá, Biná, Daat*) sobre la emoción y la misión de crear una morada para Dios en lo inferior (*Dirá BeTajtonim*). **Breslov** (*Rabí Najmán de Breslev*, *Likutey Moharán*) enfatiza la alegría incondicional (*Mitzvá Guedolá Lihyot BeSimjá*, II:24), el clamor de *Azamrá* (I:282) y la plegaria personal espontánea (*Hitbodedut*).\n- **Ortodoxia Lituana (*Mitnagdim / Yeshivot*) y Moderna:** Centrada en el estudio analítico del Talmud (*Torá Lishmá*) y el *Shulján Aruj*.\n- **Judaísmo Conservador (*Masortí*) y Reformista:** Aunque debaten con la Ortodoxia sobre la historia de la Halajá, **permanecen dentro del umbral teológico judío** porque adoran exclusivamente al Único Dios incorpóreo del *Shemá Israel* (*Deuteronomio 6:4*) y rechazan toda idolatría o encarnación humana.\n\n#### 2. El Límite Infranqueable: Por Qué los «Judíos Mesiánicos» Son Cristianos Evangélicos\n- **Teología Trinitaria y Encarnacionista:** Adoran a Jesús como «Dios Hijo encarnado», violando la unicidad e incorporeidad absoluta de Dios (*Deuteronomio 6:4*; *Números 23:19*; *Maimónides, Hiljot Yesodei HaTorá 1:7* y *Hiljot Teshuvá 3:7*).\n- **Origen Histórico Bautista/Evangélico:** Nacieron de misiones protestantes como *«Jews for Jesus»* (1970, fundada por el ministro bautista Martin Rosen) y la *«Messianic Jewish Alliance»*, adoptando vocabulario hebreo (*Yeshúa*, *Talit*, *Kehilá*) como estrategia de proselitismo hacia judíos.\n- **Consenso Unánime Judío y Jurídico:** Todas las denominaciones judías (Ortodoxa, Jabad, Breslev, Sefardí, Conservadora y Reformista) y la Corte Suprema del Estado de Israel (*Caso Beresford*, HCJ 265/87, 1989) dictaminan unánimemente que el «judaísmo mesiánico» es otra religión: **cristianismo evangélico**.`
         : isAfterlifeSoulDestinyTopic
         ? `### Profundización Comparativa: El Destino de las Almas (*Olam HaBá* frente a *Nirvana*, *Valhalla*, Cielo e Infierno)\n\n#### 1. Universalidad frente a Especificidad del Mandamiento en los Requisitos de Acceso\n- **En las Fuentes Externas:** El *Nirvana* budista (*Udāna 8.1*) exige extinguir el deseo (*Tanha*) y disolver el yo individual (*Anatta*); el *Valhalla* nórdico (*Grímnismál 8–10*) exige morir en combate armado; y las visiones dogmáticas de Cielo/Infierno exigen adherir a un credo exclusivo.\n- **En las Fuentes Internas de la Torá:** El judaísmo establece que **«los justos de todas las naciones tienen parte en el Olam HaBá»** (*Tosefta Sanhedrín 13:2*; *Rambam, Hiljot Teshuvá 3:5*) al cumplir los **7 Preceptos Universales de Noé** (*Sanhedrín 56a*), mientras que el pueblo de Israel santifica la vida mediante la **especificidad concreta de las 613 Mitzvot** (*Pirké Avot 4:16–17*).\n\n#### 2. ¿Existe el Infierno Eterno en el Judaísmo?\n- En el Talmud (*Shabat 33b*; *Eduyot 2:10*; *Rosh Hashaná 17a*), el *Guehinom* no es una tortura perpetua, sino un proceso espiritual y pedagógico de purificación del alma cuya duración máxima para un transgresor ordinario es de **doce meses**, tras lo cual el alma purificada asciende al *Gan Edén* (*Berajot 17a*).`
         : isEnlightenmentBuddhismTopic
@@ -8515,9 +8762,70 @@ process.on('unhandledRejection', (reason: any) => {
   console.warn('[Darshán AI · SafePoint Process Guard] unhandledRejection interceptada:', reason?.message || reason);
 });
 
+function listenWithRetry(
+  appInstance: express.Express,
+  port: number,
+  onListening: () => void,
+  onCloseCleanup?: () => Promise<void> | void
+) {
+  const maxRetries = 20;
+  const retryDelayMs = 350;
+  let attempts = 0;
+  let activeServer: http.Server | null = null;
+
+  const tryListen = () => {
+    attempts += 1;
+    const srv = http.createServer(appInstance);
+    activeServer = srv;
+
+    srv.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE' && attempts <= maxRetries) {
+        console.warn(
+          `[Darshán AI] Puerto ${port} ocupado en reinicio (intento ${attempts}/${maxRetries}); reintentando en ${retryDelayMs}ms...`
+        );
+        try {
+          srv.close();
+        } catch {
+          // ignore
+        }
+        setTimeout(tryListen, retryDelayMs);
+        return;
+      }
+      console.error(`[Darshán AI] Error fatal al iniciar servidor en puerto ${port}:`, err?.message || err);
+      process.exit(1);
+    });
+
+    srv.once('listening', () => {
+      onListening();
+    });
+
+    srv.listen(port, '0.0.0.0');
+  };
+
+  const gracefulShutdown = () => {
+    const forceTimer = setTimeout(() => process.exit(0), 1200);
+    forceTimer.unref();
+    Promise.resolve(onCloseCleanup?.())
+      .catch(() => {})
+      .finally(() => {
+        if (activeServer) {
+          activeServer.close(() => process.exit(0));
+        } else {
+          process.exit(0);
+        }
+      });
+  };
+
+  process.once('SIGTERM', gracefulShutdown);
+  process.once('SIGINT', gracefulShutdown);
+
+  tryListen();
+}
+
 // Vite dev middleware or static file serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    let viteInstance: any = null;
     let viteMiddleware: any = null;
     let vitePromise: Promise<any> | null = null;
 
@@ -8529,14 +8837,20 @@ async function startServer() {
               server: {
                 middlewareMode: true,
                 hmr: false,
+                ws: false as const,
                 watch: null,
               },
               appType: 'spa',
             })
           )
           .then((vite) => {
+            viteInstance = vite;
             viteMiddleware = vite.middlewares;
             return vite;
+          })
+          .catch((err) => {
+            vitePromise = null;
+            throw err;
           });
       }
       return vitePromise;
@@ -8553,12 +8867,21 @@ async function startServer() {
       }
     });
 
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`[Darshán AI] Servidor iniciado en http://0.0.0.0:${PORT}`);
-      ensureViteLoaded().catch((err) => {
-        console.warn('[Darshán AI] Aviso al inicializar Vite middleware:', err?.message);
-      });
-    });
+    listenWithRetry(
+      app,
+      PORT,
+      () => {
+        console.log(`[Darshán AI] Servidor iniciado en http://0.0.0.0:${PORT}`);
+        ensureViteLoaded().catch((err) => {
+          console.warn('[Darshán AI] Aviso al inicializar Vite middleware:', err?.message);
+        });
+      },
+      async () => {
+        if (viteInstance?.close) {
+          await viteInstance.close();
+        }
+      }
+    );
   } else {
     const distDir = fs.existsSync(path.resolve(__dirname, 'index.html'))
       ? __dirname
@@ -8579,7 +8902,7 @@ async function startServer() {
       res.sendFile(path.resolve(distDir, 'index.html'));
     });
 
-    app.listen(PORT, '0.0.0.0', () => {
+    listenWithRetry(app, PORT, () => {
       console.log(`[Darshán AI] Servidor iniciado en http://0.0.0.0:${PORT}`);
     });
   }

@@ -18,6 +18,8 @@ import {
   ExternalLink,
   AlignLeft,
   Feather,
+  ScrollText,
+  ShieldCheck,
 } from 'lucide-react';
 import { getToneMeta } from '../../utils/toneAdvisor';
 import {
@@ -645,6 +647,93 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
             </div>
           </section>
         )}
+
+        {/* Módulo Halájico: Citas Breves y Directas del Shulján Aruj (Sin Filosofía Externa) */}
+        {(() => {
+          const activeHalakhicConsultation =
+            derasha.halakhicConsultation || phase1Data?.halakhicConsultation;
+          if (
+            !activeHalakhicConsultation?.active ||
+            !activeHalakhicConsultation.directQuotes?.length
+          ) {
+            return null;
+          }
+
+          return (
+            <section className="rounded-2xl bg-emerald-950/20 border border-emerald-500/35 p-5 sm:p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-3">
+                <div className="space-y-0.5">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-300 flex items-center gap-1.5">
+                    <ScrollText className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Módulo Halájico · Citas Breves y Directas del Shulján Aruj</span>
+                  </span>
+                  <h4 className="text-base sm:text-lg font-serif font-bold text-white">
+                    {activeHalakhicConsultation.consultedBranchLabels.join(' · ')}
+                  </h4>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-200 bg-emerald-500/15 border border-emerald-400/35 px-2.5 py-1 rounded-lg">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Filosofía Externa / Comparativa: OMITIDA</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {activeHalakhicConsultation.directQuotes.map((q) => (
+                  <div
+                    key={q.id}
+                    className="p-4 rounded-xl bg-slate-950/70 border border-emerald-500/25 space-y-2.5 flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
+                            {q.focusBranchLabel} · {q.simanSeifLabel}
+                          </span>
+                          <h5 className="text-sm font-semibold text-white">
+                            {q.topicLabel}
+                          </h5>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0" dir="rtl">
+                          {q.heRef}
+                        </span>
+                      </div>
+
+                      <p
+                        className="font-hebrew text-sm sm:text-base text-amber-200/95 bg-slate-900/70 rounded-lg px-3 py-2 border border-slate-800 leading-relaxed"
+                        dir="rtl"
+                      >
+                        «{q.briefHebrewQuote}»
+                      </p>
+
+                      <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                        «{q.briefSpanishQuote}»
+                      </p>
+
+                      {q.mejaberAndRamaNote && (
+                        <p className="text-[11px] text-sky-300/90 leading-relaxed bg-sky-950/25 border border-sky-500/20 rounded-lg px-2.5 py-1.5">
+                          <strong>Mejaber / Ramá:</strong> {q.mejaberAndRamaNote}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
+                      <span className="text-slate-400 font-mono truncate">{q.ref}</span>
+                      <a
+                        href={q.sefariaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200 font-medium shrink-0"
+                      >
+                        <span>Sefaria</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Contraste Exegético Formal y Fuentes Externas Consultadas */}
         {(() => {

@@ -126,6 +126,39 @@ export interface HalakhicPipelineValidation {
   systemPromptGuard: string;
 }
 
+export type HalakhicConsultationFocus =
+  | 'REZOS'
+  | 'FESTIVIDADES'
+  | 'KASHRUT'
+  | 'HALAJA_GENERAL';
+
+export interface ShulchanArukhDirectQuote {
+  id: string;
+  ref: string;
+  heRef: string;
+  simanSeifLabel: string;
+  focusBranch: HalakhicConsultationFocus;
+  focusBranchLabel: string;
+  topicLabel: string;
+  briefHebrewQuote: string;
+  briefSpanishQuote: string;
+  mejaberAndRamaNote?: string;
+  sefariaUrl: string;
+  verifiedFromSefaria?: boolean;
+}
+
+export interface HalakhicShulchanArukhConsultation {
+  active: boolean;
+  consultedBranches: HalakhicConsultationFocus[];
+  consultedBranchLabels: string[];
+  matchedSubtopics: string[];
+  consultedSefariaRefs: string[];
+  directQuotes: ShulchanArukhDirectQuote[];
+  externalPhilosophyOmitted: boolean;
+  moduleSummary: string;
+  systemPromptDirective: string;
+}
+
 export interface Phase1AnalysisResult {
   title: string;
   primaryHebrew: string;
@@ -140,6 +173,7 @@ export interface Phase1AnalysisResult {
   formalContrast?: FormalExegeticalContrast;
   externalThinkerDetection?: ExternalThinkerPipelineDetection;
   halakhicValidation?: HalakhicPipelineValidation;
+  halakhicConsultation?: HalakhicShulchanArukhConsultation;
   detectedMetodologia?: DerashaMethodology;
   metodologiasComplementarias?: DerashaMethodology[];
   duracion?: DerashaDuration;
@@ -307,6 +341,7 @@ export interface FinalDerasha {
   formalContrast?: FormalExegeticalContrast;
   externalThinkerDetection?: ExternalThinkerPipelineDetection;
   halakhicValidation?: HalakhicPipelineValidation;
+  halakhicConsultation?: HalakhicShulchanArukhConsultation;
   practicalConclusion: {
     title: string;
     hashkafa: string;

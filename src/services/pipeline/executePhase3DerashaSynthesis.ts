@@ -8,6 +8,14 @@ import {
 } from '../../types';
 import { requestPhase3Derasha } from '../api';
 import { resolvePipelineMethodology } from '../../utils/methodologyLogicGates';
+import {
+  consultHalakhicShulchanArukhModule,
+  enrichHalakhicConsultationWithVerifiedSources,
+} from '../../utils/halakhicShulchanArukhModule';
+import {
+  sanitizeHalakhicOutputFromExternalCitations,
+  validatePurelyHalakhicQuery,
+} from '../../utils/halakhicPipelineValidator';
 import { Phase3DerashaSynthesisParams, Phase3DerashaSynthesisResult } from './types';
 
 /**
@@ -16,14 +24,32 @@ import { Phase3DerashaSynthesisParams, Phase3DerashaSynthesisResult } from './ty
 export async function executePhase3DerashaSynthesis(
   params: Phase3DerashaSynthesisParams
 ): Promise<Phase3DerashaSynthesisResult> {
+  const halakhicValidation =
+    params.phase1Data.halakhicValidation ||
+    validatePurelyHalakhicQuery(params.effectiveQuery);
+  const suppressExternal = Boolean(halakhicValidation.externalPhilosophyInjectionDisabled);
+
+  const safeMethodology =
+    suppressExternal && params.resolvedMethodology === 'FILOSOFIA_CONTRASTIVA'
+      ? 'PARDES'
+      : params.resolvedMethodology;
+  const safeComplementary = (params.complementaryMethodologies || []).filter(
+    (m) => !suppressExternal || m !== 'FILOSOFIA_CONTRASTIVA'
+  );
+
+  const baseConsultation =
+    params.phase1Data.halakhicConsultation?.active
+      ? params.phase1Data.halakhicConsultation
+      : consultHalakhicShulchanArukhModule(params.effectiveQuery, halakhicValidation);
+
   const derashaPayload = {
     query: params.effectiveQuery,
     tema_o_fuente: params.effectiveQuery,
-    metodologia: params.resolvedMethodology,
+    metodologia: safeMethodology,
     audiencia_o_tono: params.audienciaOTono,
     tono_homiletico: params.tonoHomiletico,
     duracion: params.duracion,
-    metodologias_complementarias: params.complementaryMethodologies,
+    metodologias_complementarias: safeComplementary,
     title: params.phase1Data.title,
     primaryHebrew: params.phase1Data.primaryHebrew,
     transliteration: params.phase1Data.transliteration,
@@ -32,23 +58,18 @@ export async function executePhase3DerashaSynthesis(
     theologicalKeys: params.phase1Data.theologicalKeys,
     morphologicalBreakdown: params.phase1Data.morphologicalBreakdown,
     verifiedSources: params.verifiedSources,
-    externalSources: params.phase1Data.externalSources,
-    formalContrast: params.phase1Data.formalContrast,
+    externalSources: suppressExternal ? [] : params.phase1Data.externalSources,
+    formalContrast: suppressExternal ? undefined : params.phase1Data.formalContrast,
+    halakhicValidation,
+    ...(baseConsultation?.active ? { halakhicConsultation: baseConsultation } : {}),
   };
 
   const p3Result = await requestPhase3Derasha(derashaPayload);
-  const finalThinkerDet =
-    p3Result.externalThinkerDetection ||
-    params.phase1Data.externalThinkerDetection ||
-    params.fallbackThinkerDetection;
-
-  const finalDerasha: FinalDerasha = {
-    ...p3Result,
-    duracion: p3Result.duracion || params.duracion,
-    metodologiasComplementarias:
-      p3Result.metodologiasComplementarias || params.complementaryMethodologies,
-    ...(finalThinkerDet?.detected ? { externalThinkerDetection: finalThinkerDet } : {}),
-  };
+  const finalThinkerDet = suppressExternal
+    ? undefined
+    : p3Result.externalThinkerDetection ||
+      params.phase1Data.externalThinkerDetection ||
+      params.fallbackThinkerDetection;
 
   let enrichedSources = params.verifiedSources;
   if (p3Result.canonicalAnalysis?.spanishTranslations) {
@@ -59,6 +80,31 @@ export async function executePhase3DerashaSynthesis(
       return found ? { ...s, spanishTranslation: found.spanishTranslation } : s;
     });
   }
+
+  const finalHalakhicConsultation = enrichHalakhicConsultationWithVerifiedSources(
+    p3Result.halakhicConsultation?.active
+      ? p3Result.halakhicConsultation
+      : baseConsultation,
+    enrichedSources
+  );
+
+  const rawFinalDerasha: FinalDerasha = {
+    ...p3Result,
+    duracion: p3Result.duracion || params.duracion,
+    metodologiasComplementarias: (
+      p3Result.metodologiasComplementarias || safeComplementary
+    ).filter((m) => !suppressExternal || m !== 'FILOSOFIA_CONTRASTIVA'),
+    halakhicValidation: p3Result.halakhicValidation || halakhicValidation,
+    ...(finalHalakhicConsultation?.active
+      ? { halakhicConsultation: finalHalakhicConsultation }
+      : {}),
+    ...(finalThinkerDet?.detected ? { externalThinkerDetection: finalThinkerDet } : {}),
+  };
+
+  const finalDerasha = sanitizeHalakhicOutputFromExternalCitations(
+    rawFinalDerasha,
+    halakhicValidation
+  );
 
   return {
     finalDerasha,

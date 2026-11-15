@@ -18,8 +18,9 @@ export default defineConfig(() => {
       entries: ['index.html'],
     },
     server: {
-      // HMR is disabled in AI Studio to prevent WebSocket errors and flickering
+      // HMR and standalone WS server are disabled in AI Studio to prevent WebSocket/port conflicts
       hmr: false,
+      ws: false as const,
       watch: null,
     },
   };

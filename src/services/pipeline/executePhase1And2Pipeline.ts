@@ -3,6 +3,15 @@ import { requestPhase1Analysis } from '../api';
 import { fetchSefariaCanonicalSource } from '../sefaria';
 import { resolvePipelineMethodology } from '../../utils/methodologyLogicGates';
 import { mergeForcedThinkerRefsWithPredictions } from '../../utils/externalThinkerDetector';
+import {
+  consultHalakhicShulchanArukhModule,
+  enrichHalakhicConsultationWithVerifiedSources,
+  mergeHalakhicRefsWithPredictions,
+} from '../../utils/halakhicShulchanArukhModule';
+import {
+  sanitizeHalakhicOutputFromExternalCitations,
+  validatePurelyHalakhicQuery,
+} from '../../utils/halakhicPipelineValidator';
 import { getMaxRefsForDuration } from './queryEnrichment';
 import {
   Phase1And2PipelineParams,
@@ -33,24 +42,55 @@ export async function executePhase1And2Pipeline(
     metodologias_complementarias: resolution.complementaryMethodologies,
   });
 
-  const resolvedMethodology = p1Result.detectedMetodologia || resolution.resolvedMethodology;
-  const complementaryMethodologies =
-    p1Result.metodologiasComplementarias || resolution.complementaryMethodologies;
+  const halakhicValidation =
+    p1Result.halakhicValidation ||
+    resolution.evaluation.halakhicValidation ||
+    validatePurelyHalakhicQuery(params.effectiveQuery);
 
-  const thinkerDet =
-    p1Result.externalThinkerDetection || resolution.evaluation.externalThinkerDetection;
+  const resolvedMethodology =
+    halakhicValidation?.externalPhilosophyInjectionDisabled &&
+    (p1Result.detectedMetodologia === 'FILOSOFIA_CONTRASTIVA' ||
+      resolution.resolvedMethodology === 'FILOSOFIA_CONTRASTIVA')
+      ? 'PARDES'
+      : p1Result.detectedMetodologia || resolution.resolvedMethodology;
 
-  const enrichedPhase1: Phase1AnalysisResult = {
-    ...p1Result,
-    detectedMetodologia: resolvedMethodology,
-    duracion: params.duracion,
-    metodologiasComplementarias: complementaryMethodologies,
-    ...(params.tonoHomiletico ? { tonoHomiletico: p1Result.tonoHomiletico || params.tonoHomiletico } : {}),
-    logicGateReason: resolution.evaluation.explanation,
-    ...(thinkerDet?.detected ? { externalThinkerDetection: thinkerDet } : {}),
-  };
+  const complementaryMethodologies = (
+    p1Result.metodologiasComplementarias || resolution.complementaryMethodologies
+  ).filter(
+    (m) =>
+      !halakhicValidation?.externalPhilosophyInjectionDisabled ||
+      m !== 'FILOSOFIA_CONTRASTIVA'
+  );
 
-  params.onPhase1Complete?.(enrichedPhase1);
+  const thinkerDet = halakhicValidation?.externalPhilosophyInjectionDisabled
+    ? undefined
+    : p1Result.externalThinkerDetection || resolution.evaluation.externalThinkerDetection;
+
+  const baseHalakhicConsultation =
+    p1Result.halakhicConsultation?.active
+      ? p1Result.halakhicConsultation
+      : resolution.evaluation.halakhicConsultation?.active
+      ? resolution.evaluation.halakhicConsultation
+      : consultHalakhicShulchanArukhModule(params.effectiveQuery, halakhicValidation);
+
+  const baseEnrichedPhase1: Phase1AnalysisResult = sanitizeHalakhicOutputFromExternalCitations(
+    {
+      ...p1Result,
+      detectedMetodologia: resolvedMethodology,
+      duracion: params.duracion,
+      metodologiasComplementarias: complementaryMethodologies,
+      ...(params.tonoHomiletico ? { tonoHomiletico: p1Result.tonoHomiletico || params.tonoHomiletico } : {}),
+      logicGateReason: resolution.evaluation.explanation,
+      ...(halakhicValidation ? { halakhicValidation } : {}),
+      ...(baseHalakhicConsultation?.active
+        ? { halakhicConsultation: baseHalakhicConsultation }
+        : {}),
+      ...(thinkerDet?.detected ? { externalThinkerDetection: thinkerDet } : {}),
+    },
+    halakhicValidation
+  );
+
+  params.onPhase1Complete?.(baseEnrichedPhase1);
 
   const maxRefs = params.maxRefs || getMaxRefsForDuration(params.duracion);
 
@@ -66,7 +106,9 @@ export async function executePhase1And2Pipeline(
         ? p1Result.sefariaReferences.slice(0, maxRefs)
         : [{ ref: 'Genesis 1:1', rationale: 'Fuente canónica primordial' }];
 
-    const refsToFetch = thinkerDet?.detected
+    const refsToFetch = baseHalakhicConsultation?.active
+      ? mergeHalakhicRefsWithPredictions(baseHalakhicConsultation, baseRefs, maxRefs)
+      : thinkerDet?.detected
       ? mergeForcedThinkerRefsWithPredictions(thinkerDet, baseRefs, maxRefs)
       : baseRefs;
 
@@ -81,6 +123,19 @@ export async function executePhase1And2Pipeline(
       })
     );
   }
+
+  const enrichedConsultation = enrichHalakhicConsultationWithVerifiedSources(
+    baseHalakhicConsultation,
+    verifiedSources
+  );
+
+  const enrichedPhase1 = sanitizeHalakhicOutputFromExternalCitations(
+    {
+      ...baseEnrichedPhase1,
+      ...(enrichedConsultation?.active ? { halakhicConsultation: enrichedConsultation } : {}),
+    },
+    halakhicValidation
+  );
 
   return {
     phase1Data: enrichedPhase1,
@@ -111,14 +166,31 @@ export async function resolvePrewarmedOrExecutePhase1And2(
     params.prewarmedCache.verifiedSources.length > 0;
 
   if (hasCompletedPrewarmForQuery && params.prewarmedCache) {
-    const activeP1Data: Phase1AnalysisResult = {
-      ...params.prewarmedCache.phase1Data,
-      detectedMetodologia: resolution.resolvedMethodology,
-      duracion: params.duracion,
-      metodologiasComplementarias: resolution.complementaryMethodologies,
-      logicGateReason: params.logicGateExplanation,
-    };
     const activeFetchedSources = params.prewarmedCache.verifiedSources.slice(0, maxRefsForDuration);
+    const halakhicValidation =
+      params.prewarmedCache.phase1Data.halakhicValidation ||
+      resolution.evaluation.halakhicValidation ||
+      validatePurelyHalakhicQuery(params.effectiveQuery);
+    const rawConsultation =
+      params.prewarmedCache.phase1Data.halakhicConsultation?.active
+        ? params.prewarmedCache.phase1Data.halakhicConsultation
+        : resolution.evaluation.halakhicConsultation;
+    const enrichedConsultation = enrichHalakhicConsultationWithVerifiedSources(
+      rawConsultation,
+      activeFetchedSources
+    );
+    const activeP1Data: Phase1AnalysisResult = sanitizeHalakhicOutputFromExternalCitations(
+      {
+        ...params.prewarmedCache.phase1Data,
+        detectedMetodologia: resolution.resolvedMethodology,
+        duracion: params.duracion,
+        metodologiasComplementarias: resolution.complementaryMethodologies,
+        logicGateReason: params.logicGateExplanation,
+        ...(halakhicValidation ? { halakhicValidation } : {}),
+        ...(enrichedConsultation?.active ? { halakhicConsultation: enrichedConsultation } : {}),
+      },
+      halakhicValidation
+    );
     return {
       phase1Data: activeP1Data,
       verifiedSources: activeFetchedSources,
@@ -144,14 +216,31 @@ export async function resolvePrewarmedOrExecutePhase1And2(
     }
 
     if (prewarmed && prewarmed.verifiedSources.length > 0) {
-      const activeP1Data: Phase1AnalysisResult = {
-        ...prewarmed.phase1Data,
-        detectedMetodologia: resolution.resolvedMethodology,
-        duracion: params.duracion,
-        metodologiasComplementarias: resolution.complementaryMethodologies,
-        logicGateReason: params.logicGateExplanation,
-      };
       const activeFetchedSources = prewarmed.verifiedSources.slice(0, maxRefsForDuration);
+      const halakhicValidation =
+        prewarmed.phase1Data.halakhicValidation ||
+        resolution.evaluation.halakhicValidation ||
+        validatePurelyHalakhicQuery(params.effectiveQuery);
+      const rawConsultation =
+        prewarmed.phase1Data.halakhicConsultation?.active
+          ? prewarmed.phase1Data.halakhicConsultation
+          : resolution.evaluation.halakhicConsultation;
+      const enrichedConsultation = enrichHalakhicConsultationWithVerifiedSources(
+        rawConsultation,
+        activeFetchedSources
+      );
+      const activeP1Data: Phase1AnalysisResult = sanitizeHalakhicOutputFromExternalCitations(
+        {
+          ...prewarmed.phase1Data,
+          detectedMetodologia: resolution.resolvedMethodology,
+          duracion: params.duracion,
+          metodologiasComplementarias: resolution.complementaryMethodologies,
+          logicGateReason: params.logicGateExplanation,
+          ...(halakhicValidation ? { halakhicValidation } : {}),
+          ...(enrichedConsultation?.active ? { halakhicConsultation: enrichedConsultation } : {}),
+        },
+        halakhicValidation
+      );
       return {
         phase1Data: activeP1Data,
         verifiedSources: activeFetchedSources,
