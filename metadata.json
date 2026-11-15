@@ -1,0 +1,8 @@
+{
+  "name": "Darshán AI",
+  "description": "Análisis exegético y redacción de derashot con metodología Pardés, morfología hebrea y verificación canónica en Sefaria.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

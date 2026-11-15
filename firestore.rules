@@ -1,0 +1,202 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Blueprint Validator: DerashaArchiveRecord
+    function isValidDerashaArchiveRecord(data) {
+      return data.keys().hasAll([
+        'ownerId',
+        'sequenceNumber',
+        'title',
+        'query',
+        'methodology',
+        'duration',
+        'audienceOrTone',
+        'centralIdea',
+        'essaySummary',
+        'sourcesSummary',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ownerId',
+        'sequenceNumber',
+        'title',
+        'query',
+        'methodology',
+        'duration',
+        'audienceOrTone',
+        'centralIdea',
+        'essaySummary',
+        'sourcesSummary',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.ownerId is string &&
+      data.ownerId.size() >= 1 &&
+      data.ownerId.size() <= 128 &&
+      data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.ownerId == request.auth.uid &&
+      data.sequenceNumber is int &&
+      data.sequenceNumber >= 1 &&
+      data.sequenceNumber <= 100000 &&
+      data.title is string &&
+      data.title.size() >= 1 &&
+      data.title.size() <= 300 &&
+      data.query is string &&
+      data.query.size() >= 1 &&
+      data.query.size() <= 2000 &&
+      data.methodology is string &&
+      data.methodology.size() >= 1 &&
+      data.methodology.size() <= 80 &&
+      data.duration is string &&
+      data.duration.size() >= 1 &&
+      data.duration.size() <= 40 &&
+      data.audienceOrTone is string &&
+      data.audienceOrTone.size() >= 1 &&
+      data.audienceOrTone.size() <= 200 &&
+      data.centralIdea is string &&
+      data.centralIdea.size() >= 1 &&
+      data.centralIdea.size() <= 2000 &&
+      data.essaySummary is string &&
+      data.essaySummary.size() >= 1 &&
+      data.essaySummary.size() <= 15000 &&
+      data.sourcesSummary is string &&
+      data.sourcesSummary.size() <= 4000 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Blueprint Validator: ComparativeDerashaStudy
+    function isValidComparativeDerashaStudy(data) {
+      return data.keys().hasAll([
+        'ownerId',
+        'relationType',
+        'comparedLabel',
+        'userHypothesis',
+        'synthesisTitle',
+        'executiveVerdict',
+        'contradictionsAnalysis',
+        'complementarityAnalysis',
+        'dialecticalResolution',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ownerId',
+        'relationType',
+        'comparedLabel',
+        'userHypothesis',
+        'synthesisTitle',
+        'executiveVerdict',
+        'contradictionsAnalysis',
+        'complementarityAnalysis',
+        'dialecticalResolution',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.ownerId is string &&
+      data.ownerId.size() >= 1 &&
+      data.ownerId.size() <= 128 &&
+      data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.ownerId == request.auth.uid &&
+      data.relationType is string &&
+      data.relationType.size() <= 40 &&
+      data.relationType in ['RELACION', 'CONTRADICCION', 'COMPLEMENTO', 'INTEGRAL'] &&
+      data.comparedLabel is string &&
+      data.comparedLabel.size() >= 1 &&
+      data.comparedLabel.size() <= 300 &&
+      data.userHypothesis is string &&
+      data.userHypothesis.size() <= 2000 &&
+      data.synthesisTitle is string &&
+      data.synthesisTitle.size() >= 1 &&
+      data.synthesisTitle.size() <= 300 &&
+      data.executiveVerdict is string &&
+      data.executiveVerdict.size() >= 1 &&
+      data.executiveVerdict.size() <= 4000 &&
+      data.contradictionsAnalysis is string &&
+      data.contradictionsAnalysis.size() >= 1 &&
+      data.contradictionsAnalysis.size() <= 6000 &&
+      data.complementarityAnalysis is string &&
+      data.complementarityAnalysis.size() >= 1 &&
+      data.complementarityAnalysis.size() <= 6000 &&
+      data.dialecticalResolution is string &&
+      data.dialecticalResolution.size() >= 1 &&
+      data.dialecticalResolution.size() <= 6000 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    match /derashot_archive/{derashaId} {
+      allow get: if isSignedIn() && isValidId(derashaId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() &&
+        isValidId(derashaId) &&
+        isValidDerashaArchiveRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(derashaId) &&
+        isValidDerashaArchiveRecord(incoming()) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'centralIdea',
+          'essaySummary',
+          'sourcesSummary',
+          'updatedAt'
+        ]);
+      allow delete: if isSignedIn() && isValidId(derashaId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /comparative_studies/{studyId} {
+      allow get: if isSignedIn() && isValidId(studyId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow create: if isSignedIn() &&
+        isValidId(studyId) &&
+        isValidComparativeDerashaStudy(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(studyId) &&
+        isValidComparativeDerashaStudy(incoming()) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'synthesisTitle',
+          'executiveVerdict',
+          'contradictionsAnalysis',
+          'complementarityAnalysis',
+          'dialecticalResolution',
+          'updatedAt'
+        ]);
+      allow delete: if isSignedIn() && isValidId(studyId) && existing().ownerId == request.auth.uid;
+    }
+  }
+}

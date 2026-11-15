@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Darshán AI – Exégesis Judía y Derashot con Metodología PARDÉS</title>
+    <meta
+      name="description"
+      content="Estudio exegético de la Torá, derashot en 4 niveles del PARDÉS, morfología hebrea, ciclos de Jonathan Sacks y Rab Gordon y fuentes canónicas en Sefaria."
+    />
+    <meta
+      name="keywords"
+      content="Darshán AI, Exégesis Judía, Derashot, PARDÉS, Pshat, Remez, Drash, Sod, Torá, Talmud, Sefaria, Parashá de la Semana, Halajá, Mesilat Yesharim, Jonathan Sacks"
+    />
+    <meta name="author" content="Darshán AI" />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+
+    <!-- PWA & Mobile App Meta (Android APK / TWA & iOS Safari) -->
+    <meta name="theme-color" content="#0b1120" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Darshán AI" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+
+    <!-- OpenGraph Social Sharing Cards (WhatsApp, Telegram, Facebook, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Darshán AI" />
+    <meta property="og:locale" content="es_ES" />
+    <meta
+      property="og:title"
+      content="Darshán AI – Exégesis Judía y Derashot con Metodología PARDÉS"
+    />
+    <meta
+      property="og:description"
+      content="Estudio exegético de la Torá, derashot en 4 niveles del PARDÉS, morfología hebrea, ciclos de Jonathan Sacks y Rab Gordon y fuentes canónicas en Sefaria."
+    />
+    <meta property="og:image" content="/pwa-512x512.png" />
+    <meta property="og:image:alt" content="Darshán AI – Mesa de Estudio Exegético y PARDÉS" />
+
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Darshán AI – Exégesis Judía y Derashot con Metodología PARDÉS"
+    />
+    <meta
+      name="twitter:description"
+      content="Estudio exegético de la Torá, derashot en 4 niveles del PARDÉS, morfología hebrea, ciclos de Jonathan Sacks y Rab Gordon y fuentes canónicas en Sefaria."
+    />
+    <meta name="twitter:image" content="/pwa-512x512.png" />
+
+    <!-- Dynamic Canonical URL & og:url for Web Publication -->
+    <script>
+      (function () {
+        var canonicalUrl = window.location.origin + window.location.pathname;
+        var link = document.createElement('link');
+        link.rel = 'canonical';
+        link.href = canonicalUrl;
+        document.head.appendChild(link);
+        var ogUrl = document.createElement('meta');
+        ogUrl.setAttribute('property', 'og:url');
+        ogUrl.content = canonicalUrl;
+        document.head.appendChild(ogUrl);
+      })();
+    </script>
+
+    <!-- Schema.org Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Darshán AI",
+        "alternateName": "Darshán AI – Exégesis Judía y Derashot con Metodología PARDÉS",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web, Android, iOS",
+        "inLanguage": ["es", "he"],
+        "browserRequirements": "Requires JavaScript. HTML5.",
+        "description": "Plataforma de exégesis judía clásica, redacción de derashot con metodología PARDÉS, calendario litúrgico, Mesilat Yesharim, persistencia en Google Drive y verificación canónica en Sefaria API v3.",
+        "featureList": [
+          "Exégesis en los 4 niveles del PARDÉS (Pshat, Remez, Drash, Sod)",
+          "7 Puertas Lógicas Metodológicas (Halajá, Filología, Musar, Maestros Contemporáneos, Contraste Filosófico, Comparación de Derashot)",
+          "Verificación canónica bilingüe en Sefaria API v3",
+          "Persistencia de Derashot asociada al usuario en Google Drive (0 KB ocupados en la app)"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cardo:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@600;700;800&family=David+Libre:wght@400;500;700&family=Frank+Ruhl+Libre:wght@400;500;600;700;800&family=Heebo:wght@300;400;500;600;700&family=Noto+Serif+Hebrew:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-[#0b1120] text-slate-100 min-h-screen selection:bg-sky-500/30 selection:text-sky-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

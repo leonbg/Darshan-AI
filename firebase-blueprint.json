@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "DerashaArchiveRecord": {
+      "title": "DerashaArchiveRecord",
+      "description": "Archived Derasha study numbered sequentially (#1, #2, etc.) for historical search and cross-Derasha dialectical comparison.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Authenticated Firebase UID of the study owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sequenceNumber": {
+          "type": "integer",
+          "description": "Sequential user-facing Derasha number (#1, #2, #3...)."
+        },
+        "title": {
+          "type": "string",
+          "description": "Homiletical title of the Derasha.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "query": {
+          "type": "string",
+          "description": "Original query or topic that generated the Derasha.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "methodology": {
+          "type": "string",
+          "description": "Primary exegetical methodology applied.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "duration": {
+          "type": "string",
+          "description": "Target speaking duration of the Derasha.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "audienceOrTone": {
+          "type": "string",
+          "description": "Target audience or pedagogical tone.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "centralIdea": {
+          "type": "string",
+          "description": "Core thesis or kavana central of the Derasha.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "essaySummary": {
+          "type": "string",
+          "description": "Full or summarized homiletical text for search and comparison.",
+          "minLength": 1,
+          "maxLength": 15000
+        },
+        "sourcesSummary": {
+          "type": "string",
+          "description": "Canonical Sefaria references and external sources cited.",
+          "maxLength": 4000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "sequenceNumber",
+        "title",
+        "query",
+        "methodology",
+        "duration",
+        "audienceOrTone",
+        "centralIdea",
+        "essaySummary",
+        "sourcesSummary",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ComparativeDerashaStudy": {
+      "title": "ComparativeDerashaStudy",
+      "description": "Dialectical comparison between two or more archived Derashot (e.g., #1 vs #5) analyzing relationship, contradiction, or complementarity.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Authenticated Firebase UID of the study owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "relationType": {
+          "type": "string",
+          "description": "Analytical lens: RELACION, CONTRADICCION, COMPLEMENTO, or INTEGRAL.",
+          "enum": ["RELACION", "CONTRADICCION", "COMPLEMENTO", "INTEGRAL"],
+          "maxLength": 40
+        },
+        "comparedLabel": {
+          "type": "string",
+          "description": "Human-readable label of compared Derashot (e.g. 'Derashá #1 vs Derashá #5').",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "userHypothesis": {
+          "type": "string",
+          "description": "User observation or hypothesis about how the selected Derashot relate, contradict, or complement each other.",
+          "maxLength": 2000
+        },
+        "synthesisTitle": {
+          "type": "string",
+          "description": "Title of the comparative dialectical synthesis.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "executiveVerdict": {
+          "type": "string",
+          "description": "Direct evaluation of the user hypothesis across the selected Derashot.",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "contradictionsAnalysis": {
+          "type": "string",
+          "description": "Analysis of tensions or apparent contradictions (Machloket) between the Derashot.",
+          "minLength": 1,
+          "maxLength": 6000
+        },
+        "complementarityAnalysis": {
+          "type": "string",
+          "description": "Analysis of how the Derashot complement and enrich each other.",
+          "minLength": 1,
+          "maxLength": 6000
+        },
+        "dialecticalResolution": {
+          "type": "string",
+          "description": "Higher synthesis and homiletical integration of the compared Derashot.",
+          "minLength": 1,
+          "maxLength": 6000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "relationType",
+        "comparedLabel",
+        "userHypothesis",
+        "synthesisTitle",
+        "executiveVerdict",
+        "contradictionsAnalysis",
+        "complementarityAnalysis",
+        "dialecticalResolution",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/derashot_archive/{derashaId}": {
+      "schema": {
+        "$ref": "#/entities/DerashaArchiveRecord"
+      },
+      "description": "User-owned archived Derashot with sequential numbering (#1, #2, etc.) and full searchable metadata."
+    },
+    "/comparative_studies/{studyId}": {
+      "schema": {
+        "$ref": "#/entities/ComparativeDerashaStudy"
+      },
+      "description": "User-owned dialectical comparison studies between multiple archived Derashot."
+    }
+  }
+}
