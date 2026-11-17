@@ -18,6 +18,7 @@ import {
   classifySefariaLinkCandidate,
   sortMishnatHaDorotChronologically,
 } from '../utils/mishnatHaDorotClassifier';
+import { buildDeterministicMethodologyDeliberation } from '../utils/methodologyLogicGates';
 
 export interface HealthStatus {
   status: string;
@@ -268,23 +269,37 @@ export async function requestDecideMethodology(
     Accept: 'application/json',
   };
 
-  const res = await fetchServerJsonWithRetry<MethodologyDeliberationResult>(
-    '/api/decide-methodology',
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        query,
-        tema_o_fuente: query,
-        ...(tonoHomiletico ? { tono_homiletico: tonoHomiletico } : {}),
-      }),
-      signal,
-    },
-    '/api/decide-methodology',
-    1,
-    25000
-  );
-  return sanitizeStrictJewishObject(res);
+  try {
+    const res = await fetchServerJsonWithRetry<MethodologyDeliberationResult>(
+      '/api/decide-methodology',
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          query,
+          tema_o_fuente: query,
+          ...(tonoHomiletico ? { tono_homiletico: tonoHomiletico } : {}),
+        }),
+        signal,
+      },
+      '/api/decide-methodology',
+      2,
+      12000
+    );
+    return sanitizeStrictJewishObject(res);
+  } catch (err: any) {
+    if (err?.name === 'AbortError' || signal?.aborted) {
+      throw err;
+    }
+    if (err instanceof ApiHttpError && err.status === 400 && err.errorCode === 'CONTENT_BLOCKED') {
+      throw err;
+    }
+    console.warn(
+      '[Darshán AI] /api/decide-methodology usó deliberación determinista local tras error transitorio:',
+      err?.message || err
+    );
+    return buildDeterministicMethodologyDeliberation(query, tonoHomiletico);
+  }
 }
 
 export async function requestPhase1Analysis(

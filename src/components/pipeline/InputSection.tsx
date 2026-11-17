@@ -85,6 +85,8 @@ interface InputSectionProps {
   isHomeTapArmed?: boolean;
   onClearOrReturnHome?: () => void;
   onOpenUserManualModal?: () => void;
+  collapseFanSignal?: number;
+  isEvaluatingQuery?: boolean;
 }
 
 export const METHODOLOGY_OPTIONS: Array<{
@@ -206,6 +208,8 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
   isHomeTapArmed: isHomeTapArmedProp,
   onClearOrReturnHome,
   onOpenUserManualModal,
+  collapseFanSignal = 0,
+  isEvaluatingQuery = false,
 }) => {
   // Collapsed by default so the UI stays clean and uncluttered
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
@@ -233,6 +237,14 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
       onFanOpenChange?.(false);
     }
   }, [homeResetSignal, onFanOpenChange]);
+
+  useEffect(() => {
+    if (collapseFanSignal > 0) {
+      setIsConfigOpen(false);
+      setShowGateDetails(false);
+      onFanOpenChange?.(false);
+    }
+  }, [collapseFanSignal, onFanOpenChange]);
 
   const handleClearOrDoubleTapHome = useCallback(() => {
     if (onClearOrReturnHome) {
@@ -793,13 +805,13 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={isLoading || !query.trim()}
+              disabled={isLoading || isEvaluatingQuery || !query.trim()}
               className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-sky-400 hover:bg-sky-300 text-slate-950 shadow-sm disabled:opacity-50 disabled:pointer-events-none transition cursor-pointer"
             >
-              {isLoading ? (
+              {isLoading || isEvaluatingQuery ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Generando...</span>
+                  <span>{isEvaluatingQuery && !isLoading ? 'Evaluando consulta...' : 'Generando...'}</span>
                 </>
               ) : (
                 <>

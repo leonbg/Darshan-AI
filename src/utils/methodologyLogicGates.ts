@@ -1,13 +1,17 @@
 import {
   DerashaMethodology,
   DerashaDuration,
+  DerashaTone,
   ExternalThinkerPipelineDetection,
   HalakhicPipelineValidation,
   HalakhicShulchanArukhConsultation,
+  MethodologyCandidateAnalysis,
+  MethodologyDeliberationResult,
 } from '../types';
 import { detectExternalThinkerAndForceExegeticalSearch } from './externalThinkerDetector';
 import { validatePurelyHalakhicQuery } from './halakhicPipelineValidator';
 import { consultHalakhicShulchanArukhModule } from './halakhicShulchanArukhModule';
+import { getToneMeta, normalizeDerashaTone, resolveDerashaTone } from './toneAdvisor';
 
 export type ResolvedMethodology = Exclude<DerashaMethodology, 'AUTO'>;
 
@@ -831,4 +835,203 @@ export function resolvePipelineMethodology(
     evaluation,
   };
 }
+
+const KEY_SOURCE_HINT_MAP: Record<ResolvedMethodology, string> = {
+  PARDES: 'Tanaj · Rashi · Ramban · Midrash Rabá · Zóhar HaKadosh',
+  WISSENSCHAFT_DES_JUDENTUMS:
+    'Sotah 40a · Berakhot 33a · Yerushalmi · Seder Rav Amram Gaón · Guenizá de El Cairo',
+  EVOLUCION_CONCEPTUAL:
+    'Torá y Jazal · Etz Jaim / Pardés Rimonim · Mesilat Yesharim · Tania y Jasidut',
+  MESILAT_YESHARIM_SISTEMATICO:
+    'Ramjal (Mesilat Yesharim caps. 1–26) · Mahut, Dérej Kinyanó y Mafsidayv',
+  PIRKE_AVOT_EXEGETICO:
+    'Mishná Pirké Avot · Rambam (Shmoná Perakim) vs. Rabenu Yoná y Maharal (Dérej Jaim)',
+  MUSAR_TRANSFORMATIVO:
+    'Rabí Israel Salanter (Or Yisrael) · Alter de Kelm · Rav Dessler (Mijtav MeEliahu)',
+  FILOSOFIA_CONTRASTIVA:
+    'Eijá Rabá 2:13 · Kidushín 31a · Sanhedrín 56a · Kuzari · Moreh Nevujim vs. Fuentes Externas',
+  FILOLOGIA_LITURGICA_WISSENSCHAFT:
+    'Sotah 40a · Berakhot 33a · Yerushalmi · Seder Rav Amram Gaón · Guenizá de El Cairo',
+};
+
+const WHY_APPLICABLE_MAP: Record<ResolvedMethodology, string> = {
+  PARDES:
+    'Articula la exégesis clásica en 4 estratos (Pshat literal, Rémez alegórico, Drash homilético y Sod místico).',
+  WISSENSCHAFT_DES_JUDENTUMS:
+    'Rastrea la historia redaccional, las variantes de manuscritos, los códigos geónicos y la filología crítica del texto.',
+  EVOLUCION_CONCEPTUAL:
+    'Traza la genealogía del concepto a través de la Torá Escrita, el Árbol de la Vida cabalístico, el Musar y la Jasidut.',
+  MESILAT_YESHARIM_SISTEMATICO:
+    'Desglosa analíticamente la virtud según el Ramjal: definición esencial (Mahut), adquisición y obstáculos.',
+  PIRKE_AVOT_EXEGETICO:
+    'Contrapone las lecturas éticas de Maimónides, Rabenu Yoná de Gerona y el Maharal de Praga sobre la máxima tanaítica.',
+  MUSAR_TRANSFORMATIVO:
+    'Aísla la fricción conductual inconsciente (negiá) y diseña un ejercicio práctico de Jeshbón HaNéfesh.',
+  FILOSOFIA_CONTRASTIVA:
+    'Contrasta formalmente fuentes filosóficas o religiosas externas frente a la Torá (Universalidad vs. Especificidad del Mandamiento).',
+  FILOLOGIA_LITURGICA_WISSENSCHAFT:
+    'Rastrea la historia redaccional, las variantes de manuscritos, los códigos geónicos y la filología crítica del texto.',
+};
+
+const COMPLEMENTARY_BRIEF_MAP: Record<ResolvedMethodology, string> = {
+  WISSENSCHAFT_DES_JUDENTUMS:
+    'WISSENSCHAFT_DES_JUDENTUMS (Aporte Histórico-Filológico y Crítica Textual aplicada estrictamente al concepto consultado)',
+  FILOLOGIA_LITURGICA_WISSENSCHAFT:
+    'WISSENSCHAFT_DES_JUDENTUMS (Aporte Histórico-Filológico y Crítica Textual aplicada estrictamente al concepto consultado)',
+  EVOLUCION_CONCEPTUAL:
+    'EVOLUCION_CONCEPTUAL (Genealogía en 4 Visiones: Torá/Jazal, Cábala/Árbol de la Vida, Musar y Jasidut)',
+  MESILAT_YESHARIM_SISTEMATICO:
+    'MESILAT_YESHARIM_SISTEMATICO (Aporte Sistemático del Ramjal: Mahut, Dérej Kinyanó y obstáculos Mafsidayv)',
+  MUSAR_TRANSFORMATIVO:
+    'MUSAR_TRANSFORMATIVO (Psicología del Néfesh y Jeshbón HaNéfesh según R. Israel Salanter y Rav Dessler)',
+  PIRKE_AVOT_EXEGETICO:
+    'PIRKE_AVOT_EXEGETICO (Contraste clásico entre Rambam, Rabenu Yoná y Maharal de Praga)',
+  FILOSOFIA_CONTRASTIVA:
+    'FILOSOFIA_CONTRASTIVA (Contraste exegético formal sobre Universalidad vs. Especificidad del Mandamiento)',
+  PARDES:
+    'PARDES (Articulación hermenéutica en 4 estratos: Pshat, Rémez, Drash y Sod)',
+};
+
+function hasExplicitCitationOrCalendarHint(q: string): boolean {
+  if (/\[Calendario Hebreo/i.test(q)) return true;
+  return /\b(?:g[eé]nesis|bereshit|[eé]xodo|shemot|lev[ií]tico|vayikr[aá]|n[uú]meros|bamidbar|deuteronomio|devarim|salmos?|tehil[ií]m|proverbios|mishl[eé]|isa[ií]as|jerem[ií]as|avot|berajot|berakhot|shabat|shabbat|pesajim|pesachim|yom[aá]|suk[aá]|taanit|meguil[aá]|sanhedr[ií]n|oraj\s+jaim|orach\s+chayim|yor[eé]\s+de[aá]|shulj[aá]n\s+aruj|mesil+at\s+yesharim)\s+\d+/i.test(
+    q
+  );
+}
+
+/**
+ * Deterministic 7-gate fallback deliberation used instantaneously whenever the calibrated
+ * remote Decisions API is unreachable, times out, or hits a proxy/rate limit.
+ */
+export function buildDeterministicMethodologyDeliberation(
+  rawQuery: string,
+  requestedToneRaw?: DerashaTone | string
+): MethodologyDeliberationResult & {
+  halakhicValidation?: HalakhicPipelineValidation;
+  halakhicConsultation?: HalakhicShulchanArukhConsultation;
+  fallbackMode?: string;
+} {
+  const query = (rawQuery || '').trim();
+  const resolution30 = resolvePipelineMethodology(query, 'AUTO', '30_MIN');
+  const evaluation = resolution30.evaluation;
+  const recommendedPrimary = resolution30.resolvedMethodology;
+  const isPurelyHalakhic = Boolean(evaluation.halakhicValidation?.isPurelyHalakhic);
+  const requiresExternalContrast = Boolean(
+    !isPurelyHalakhic &&
+      (evaluation.externalThinkerDetection?.detected ||
+        recommendedPrimary === 'FILOSOFIA_CONTRASTIVA')
+  );
+
+  const toneEval = resolveDerashaTone(
+    normalizeDerashaTone(requestedToneRaw),
+    query,
+    recommendedPrimary,
+    evaluation.halakhicValidation
+  );
+  const finalTone = toneEval.resolvedTone;
+  const toneMeta = getToneMeta(finalTone);
+
+  const halakhicConsultation = consultHalakhicShulchanArukhModule(
+    query,
+    evaluation.halakhicValidation
+  );
+
+  const allSeven: Array<Exclude<DerashaMethodology, 'AUTO' | 'FILOLOGIA_LITURGICA_WISSENSCHAFT'>> = [
+    'PARDES',
+    'WISSENSCHAFT_DES_JUDENTUMS',
+    'EVOLUCION_CONCEPTUAL',
+    'MESILAT_YESHARIM_SISTEMATICO',
+    'PIRKE_AVOT_EXEGETICO',
+    'MUSAR_TRANSFORMATIVO',
+    'FILOSOFIA_CONTRASTIVA',
+  ];
+
+  const eligible = allSeven.filter((m) => !(isPurelyHalakhic && m === 'FILOSOFIA_CONTRASTIVA'));
+  const ordered = Array.from(
+    new Set([
+      recommendedPrimary,
+      ...resolution30.complementaryMethodologies,
+      ...eligible,
+    ])
+  ).filter((m): m is ResolvedMethodology => eligible.includes(m as any));
+
+  const primaryConf =
+    evaluation.confidence === 'alta' ? 0.86 : evaluation.confidence === 'media' ? 0.72 : 0.62;
+  const recommendedComplementaryFor30Min = ordered.slice(1, 3);
+  const recommendedComplementaryFor10Min = ordered.slice(1, 2);
+
+  const words = query
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-zA-Z0-9\u0590-\u05FFáéíóúüñÁÉÍÓÚÜÑ]/g, ''))
+    .filter((w) => w.length >= 2);
+  const hasExplicitCit = hasExplicitCitationOrCalendarHint(query);
+  const specificityScore = hasExplicitCit
+    ? 3
+    : words.length >= 6
+    ? 2.6
+    : words.length >= 3
+    ? 2.0
+    : words.length === 2
+    ? 1.15
+    : 0.4;
+  const specificityNormalized = Math.max(0, Math.min(100, Math.round((specificityScore / 3) * 100)));
+  const specBucket = Math.min(3, Math.max(0, Math.round(specificityScore)));
+  const specificityLabels = [
+    'Término general sin acotar',
+    'Tema amplio (admite varios ángulos)',
+    'Consulta bien enfocada',
+    'Consulta altamente específica',
+  ];
+  const needsClarification = specificityScore < 1.1 && !hasExplicitCit;
+
+  const candidates: MethodologyCandidateAnalysis[] = ordered.map((method, idx) => {
+    const isPrimary = idx === 0;
+    const isComp = idx === 1 || idx === 2;
+    const prob = isPrimary ? primaryConf : Math.max(0.04, (1 - primaryConf) / Math.max(1, ordered.length - 1));
+    return {
+      methodology: method,
+      relevanceScore: Math.max(5, Math.min(99, Math.round(prob * 100))),
+      calibratedProbability: Number(prob.toFixed(4)),
+      role: isPrimary ? 'primary' : isComp ? 'complementary' : 'optional',
+      whyApplicable: WHY_APPLICABLE_MAP[method] || WHY_APPLICABLE_MAP.PARDES,
+      expectedContribution: COMPLEMENTARY_BRIEF_MAP[method] || COMPLEMENTARY_BRIEF_MAP.PARDES,
+      keySourceHint: KEY_SOURCE_HINT_MAP[method] || KEY_SOURCE_HINT_MAP.PARDES,
+    };
+  });
+
+  const primaryPct = Math.round(primaryConf * 100);
+  const deliberationSummary = halakhicConsultation.active
+    ? `${halakhicConsultation.moduleSummary} Selección por Compuertas Lógicas: ${recommendedPrimary} (${primaryPct}%) y tono «${toneMeta.shortLabel}».`
+    : needsClarification
+    ? `La consulta presenta amplitud temática (${specificityNormalized}% de especificidad). Se priorizará ${recommendedPrimary} (${primaryPct}%), aunque se recomienda acotar el ángulo para mayor precisión.`
+    : `Evaluación por las 7 Puertas Lógicas: se selecciona ${recommendedPrimary} (${primaryPct}%) junto con ${recommendedComplementaryFor30Min.join(' y ')} y tono «${toneMeta.shortLabel}».`;
+
+  return {
+    query,
+    recommendedPrimary,
+    recommendedComplementaryFor10Min,
+    recommendedComplementaryFor30Min,
+    recommendedTone: finalTone,
+    toneRationale: toneEval.recommendationReason,
+    halakhicValidation: evaluation.halakhicValidation,
+    ...(halakhicConsultation.active ? { halakhicConsultation } : {}),
+    decisionCalibration: {
+      primaryConfidence: primaryConf,
+      toneConfidence: 0.78,
+      halakhicProbability: isPurelyHalakhic ? 0.92 : 0.12,
+      isPurelyHalakhic,
+      externalContrastProbability: requiresExternalContrast ? 0.88 : 0.08,
+      requiresExternalContrast,
+      specificityScore: Number(specificityScore.toFixed(3)),
+      specificityNormalized,
+      specificityLevelLabel: specificityLabels[specBucket] || specificityLabels[2],
+      specificityConfidence: 0.82,
+      needsClarification,
+    },
+    deliberationSummary,
+    candidates,
+    fallbackMode: 'deterministic_logic_gates',
+  };
+}
+
 

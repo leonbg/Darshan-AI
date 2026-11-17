@@ -2,6 +2,7 @@ import type { Express } from 'express';
 import { detectExternalThinkerAndForceExegeticalSearch } from '../src/utils/externalThinkerDetector.ts';
 import { validatePurelyHalakhicQuery } from '../src/utils/halakhicPipelineValidator.ts';
 import { consultHalakhicShulchanArukhModule } from '../src/utils/halakhicShulchanArukhModule.ts';
+import { buildDeterministicMethodologyDeliberation } from '../src/utils/methodologyLogicGates.ts';
 import {
   getToneMeta,
   normalizeDerashaTone,
@@ -53,17 +54,18 @@ export async function evaluateStudyQueryWithDecisionsApi(
   }
 
   const executionPromise = (async () => {
-    const decisionsAi = getDecisionsAIClient();
-    const specificityRubric = [
-      'Palabra suelta, nombre aislado o término sumamente genérico sin pregunta, versículo, contexto ni ángulo de estudio (ej.: "Shabat", "Fe", "Moshé", "Torá").',
-      'Tema general de dos o tres palabras sin precisar qué aspecto, tensión ética, pasaje o pregunta se desea explorar (ej.: "La humildad", "El rezo judío").',
-      'Tema de estudio enfocado o pregunta clara en lenguaje natural que identifica un concepto concreto, dilema práctico, festividad o corriente rabínica.',
-      'Consulta altamente específica que cita un pasaje bíblico/talmúdico/halájico, un contraste filosófico puntual o una pregunta exegética bien delimitada.',
-    ];
-
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     let decisionResponse: any;
+    let fallbackReason: any = null;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     try {
+      const decisionsAi = getDecisionsAIClient();
+      const specificityRubric = [
+        'Palabra suelta, nombre aislado o término sumamente genérico sin pregunta, versículo, contexto ni ángulo de estudio (ej.: "Shabat", "Fe", "Moshé", "Torá").',
+        'Tema general de dos o tres palabras sin precisar qué aspecto, tensión ética, pasaje o pregunta se desea explorar (ej.: "La humildad", "El rezo judío").',
+        'Tema de estudio enfocado o pregunta clara en lenguaje natural que identifica un concepto concreto, dilema práctico, festividad o corriente rabínica.',
+        'Consulta altamente específica que cita un pasaje bíblico/talmúdico/halájico, un contraste filosófico puntual o una pregunta exegética bien delimitada.',
+      ];
+
       decisionResponse = await Promise.race([
         decisionsAi.decisions.create({
           model: GEMINI_DECISION_MODEL,
@@ -143,24 +145,38 @@ export async function evaluateStudyQueryWithDecisionsApi(
           },
         }),
         new Promise((_, reject) => {
-          timeoutHandle = setTimeout(() => reject(new Error('PER_ATTEMPT_TIMEOUT')), 25000);
+          timeoutHandle = setTimeout(() => reject(new Error('PER_ATTEMPT_TIMEOUT')), 4500);
         }),
       ]);
+    } catch (err: any) {
+      fallbackReason = err;
     } finally {
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
       }
     }
 
+    if (fallbackReason) {
+      logPipelineGeminiDiagnostic('/api/decide-methodology[fallback]', fallbackReason, GEMINI_DECISION_MODEL);
+      const deterministic = buildDeterministicMethodologyDeliberation(query, requestedToneRaw);
+      setBoundedCache(decideMethodologyCache, cacheKey, deterministic);
+      return deterministic;
+    }
+
+    const specificityRubricLength = 4;
+
     if (!decisionResponse?.answers) {
       const blockReason = decisionResponse?.prompt_feedback?.block_reason;
-      throw new GeminiHttpError(
-        400,
-        'CONTENT_BLOCKED',
-        blockReason
-          ? `La consulta fue bloqueada por restricciones de contenido (${blockReason}). Por favor reformula tu pregunta.`
-          : 'No se recibieron respuestas calibradas para evaluar la consulta.'
-      );
+      if (blockReason) {
+        throw new GeminiHttpError(
+          400,
+          'CONTENT_BLOCKED',
+          `La consulta fue bloqueada por restricciones de contenido (${blockReason}). Por favor reformula tu pregunta.`
+        );
+      }
+      const deterministic = buildDeterministicMethodologyDeliberation(query, requestedToneRaw);
+      setBoundedCache(decideMethodologyCache, cacheKey, deterministic);
+      return deterministic;
     }
 
     const methodAns = decisionResponse.answers.primary_methodology;
@@ -176,11 +192,9 @@ export async function evaluateStudyQueryWithDecisionsApi(
       contrastAns?.type !== 'noul' ||
       specAns?.type !== 'score'
     ) {
-      throw new GeminiHttpError(
-        502,
-        'DECISION_SCHEMA_MISMATCH',
-        'La evaluación calibrada devolvió un formato incompleto.'
-      );
+      const deterministic = buildDeterministicMethodologyDeliberation(query, requestedToneRaw);
+      setBoundedCache(decideMethodologyCache, cacheKey, deterministic);
+      return deterministic;
     }
 
     const halakhicProb = Number(halakhaAns.noul);
@@ -307,7 +321,7 @@ export async function evaluateStudyQueryWithDecisionsApi(
     const specificityScore = Number(specAns.score || 0);
     const specificityNormalized = Math.max(
       0,
-      Math.min(100, Math.round((specificityScore / (specificityRubric.length - 1)) * 100))
+      Math.min(100, Math.round((specificityScore / (specificityRubricLength - 1)) * 100))
     );
     const specBucket = Math.min(3, Math.max(0, Math.round(specificityScore)));
     const specificityLabels = [

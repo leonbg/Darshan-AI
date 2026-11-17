@@ -131,8 +131,14 @@ export const PhaseProgressIndicator: React.FC<PhaseProgressIndicatorProps> = Rea
     return 'pending';
   };
 
+  const hasErrorState = currentStage === 'error' || Boolean(error);
+
   return (
-    <div className="bg-[#1e293b]/85 border border-slate-700/80 rounded-2xl p-4 sm:p-6 shadow-lg space-y-4">
+    <div
+      className={`bg-[#1e293b]/85 border rounded-2xl p-4 sm:p-6 shadow-lg space-y-4 ${
+        hasErrorState ? 'border-rose-500/45' : 'border-slate-700/80'
+      }`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
           <span>Relojes Independientes · Escogencia de Metodología vs. Elaboración de la Lección</span>
@@ -189,6 +195,13 @@ export const PhaseProgressIndicator: React.FC<PhaseProgressIndicatorProps> = Rea
               <span>Drashá Generada con Éxito</span>
             </span>
           )}
+
+          {hasErrorState && !isRunning && (
+            <span className="text-xs font-semibold text-rose-300 bg-rose-500/15 border border-rose-500/35 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+              <span>Generación detenida · Revisa el aviso superior</span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -227,6 +240,8 @@ export const PhaseProgressIndicator: React.FC<PhaseProgressIndicatorProps> = Rea
                   ? 'bg-sky-500/10 border-sky-500/50 shadow-md shadow-sky-500/10'
                   : status === 'done'
                   ? 'bg-slate-900/60 border-emerald-500/30 text-slate-300'
+                  : status === 'error'
+                  ? 'bg-rose-950/20 border-rose-500/35 text-rose-200'
                   : 'bg-slate-900/40 border-slate-800 text-slate-500'
               }`}
             >
@@ -237,6 +252,8 @@ export const PhaseProgressIndicator: React.FC<PhaseProgressIndicatorProps> = Rea
                       ? 'bg-sky-500 text-slate-950 animate-pulse'
                       : status === 'done'
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : status === 'error'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/35'
                       : 'bg-slate-800 text-slate-400 border border-slate-700'
                   }`}
                 >
@@ -244,6 +261,8 @@ export const PhaseProgressIndicator: React.FC<PhaseProgressIndicatorProps> = Rea
                     <Check className="w-4 h-4 text-emerald-400" />
                   ) : status === 'active' ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                  ) : status === 'error' ? (
+                    <XCircle className="w-3.5 h-3.5 text-rose-400" />
                   ) : (
                     <span>{phase.num}</span>
                   )}

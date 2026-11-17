@@ -86,7 +86,7 @@ import {
   MishnatHaDorotQuote,
 } from './types';
 import { composeAudienceAndTone } from './utils/toneAdvisor';
-import { AlertTriangle, ShieldCheck, RotateCcw, HardDrive } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, RotateCcw, HardDrive, RefreshCw, X } from 'lucide-react';
 import { clearLocalAppStorageForDriveMode } from './services';
 
 export default function App() {
@@ -170,8 +170,13 @@ export default function App() {
   const [sefariaProgress, setSefariaProgress] = useState({ current: 0, total: 0 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [clarificationState, setClarificationState] = useState<ClarificationState | null>(null);
+  const [isPreparingGeneration, setIsPreparingGeneration] = useState<boolean>(false);
+  const [collapseFanSignal, setCollapseFanSignal] = useState<number>(0);
   const activeRunIdRef = useRef<number>(0);
   const skipNextAutoSaveRef = useRef<boolean>(false);
+  const errorBannerRef = useRef<HTMLDivElement | null>(null);
+  const clarificationBannerRef = useRef<HTMLDivElement | null>(null);
+  const progressSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Pipeline data
   const [phase1Data, setPhase1Data] = useState<Phase1AnalysisResult | null>(null);
@@ -621,6 +626,23 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
+  // Ensure error, clarification, and progress notices scroll cleanly into view instead of hiding below the fold
+  useEffect(() => {
+    if (!errorMessage) return;
+    const timer = setTimeout(() => {
+      errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [errorMessage]);
+
+  useEffect(() => {
+    if (!clarificationState) return;
+    const timer = setTimeout(() => {
+      clarificationBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [clarificationState]);
+
   const handleToggleAtrilConfig = useCallback(() => {
     setSettingsInitialTab('typography');
     setIsSettingsModalOpen(true);
@@ -730,6 +752,7 @@ export default function App() {
     if (latestStateRef.current.clarificationState) {
       setClarificationState(null);
     }
+    setErrorMessage(null);
   }, []);
 
   const handleSelectSample = useCallback((sample: SampleQuery) => {
@@ -1010,6 +1033,7 @@ export default function App() {
       }
 
       setWorkspaceMode('estudio');
+      setCollapseFanSignal((n) => n + 1);
 
       if (deliberationAbortRef.current) {
         deliberationAbortRef.current.abort();
@@ -1049,6 +1073,7 @@ export default function App() {
 
       setClarificationState(null);
       setErrorMessage(null);
+      setIsPreparingGeneration(true);
 
       try {
         // Phase 0: Calibrated semantic methodology, tone, and specificity evaluation
@@ -1059,7 +1084,12 @@ export default function App() {
             ? st.deliberationResult
             : null;
 
-        if (!calibratedDecision && (!forceExecution || requestedMethodology === 'AUTO')) {
+        const queryWordCount = effectiveQuery.split(/\s+/).filter(Boolean).length;
+        const needsPhase0Calibration =
+          !calibratedDecision &&
+          (requestedMethodology === 'AUTO' || (!forceExecution && queryWordCount <= 3));
+
+        if (needsPhase0Calibration) {
           setIsDeliberatingMethodology(true);
           try {
             const evaluated = await requestDecideMethodology(
@@ -1201,6 +1231,10 @@ export default function App() {
             err.message ||
               'No hay respuestas disponibles de momento para esta consulta. Por favor aclara tu pregunta o inténtalo nuevamente.'
           );
+        }
+      } finally {
+        if (activeRunIdRef.current === currentRunId) {
+          setIsPreparingGeneration(false);
         }
       }
     },
@@ -1707,45 +1741,36 @@ export default function App() {
           isHomeTapArmed={isHomeTapArmed}
           onClearOrReturnHome={handleClearOrDoubleTapHome}
           onOpenUserManualModal={handleOpenUserManualModal}
+          collapseFanSignal={collapseFanSignal}
+          isEvaluatingQuery={isPreparingGeneration && !isLoading}
         />
 
-        {/* AVISO DE ACLARACIÓN DE CONSULTA O ESPERA MUY LARGA */}
-        {clarificationState && !isLoading && (
-          <QueryClarificationNotice
-            state={clarificationState}
-            onSelectRefinement={handleSelectRefinement}
-            onForceOriginalQuery={handleForceOriginalQuery}
-            onDismissAndEdit={handleDismissClarification}
-          />
-        )}
-
-        {/* Pipeline Phase Indicator */}
-        {(isLoading || stage === 'error') && (
-          <PhaseProgressIndicator
-            currentStage={stage}
-            currentRefIndex={sefariaProgress.current}
-            totalRefs={sefariaProgress.total}
-            error={errorMessage}
-            maxWaitSeconds={maxWaitForCurrentStage}
-            methodologyDecisionSeconds={methodologyDecisionSeconds}
-            lessonElaborationBudgetSeconds={lessonElaborationBudgetSeconds}
-            wasPrewarmed={isPrewarmedReadyForCurrentQuery}
-            onCancel={handleCancelAndRequestClarification}
-            onStageTimeout={handleStageTimeout}
-          />
-        )}
-
-        {/* Error notification if any, with 1-click Fallback to Safe Point */}
+        {/* Error notification directly below InputSection so it is immediately visible */}
         {errorMessage && (
-          <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-rose-200 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
+          <div
+            ref={errorBannerRef}
+            role="alert"
+            className="p-4 rounded-2xl bg-rose-950/50 border border-rose-500/45 text-rose-100 shadow-lg flex flex-wrap items-center justify-between gap-4"
+          >
+            <div className="flex items-start gap-3 min-w-0 flex-1">
               <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
               <div className="space-y-1 text-sm">
                 <strong className="font-semibold text-rose-300 block">Aviso del sistema</strong>
-                <p>{errorMessage}</p>
+                <p className="leading-relaxed">{errorMessage}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {query.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleGenerateDerasha(query, true)}
+                  disabled={isLoading || isPreparingGeneration}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-400 hover:bg-sky-300 text-slate-950 text-xs font-bold transition cursor-pointer whitespace-nowrap disabled:opacity-50"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reintentar</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleRestoreDefaultSafePoint}
@@ -1762,12 +1787,54 @@ export default function App() {
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Ver Respaldos</span>
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorMessage(null);
+                  if (stage === 'error') setStage('idle');
+                }}
+                aria-label="Cerrar aviso"
+                title="Cerrar aviso"
+                className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         )}
 
+        {/* AVISO DE ACLARACIÓN DE CONSULTA O ESPERA MUY LARGA */}
+        {clarificationState && !isLoading && (
+          <div ref={clarificationBannerRef}>
+            <QueryClarificationNotice
+              state={clarificationState}
+              onSelectRefinement={handleSelectRefinement}
+              onForceOriginalQuery={handleForceOriginalQuery}
+              onDismissAndEdit={handleDismissClarification}
+            />
+          </div>
+        )}
+
+        {/* Pipeline Phase Indicator */}
+        {(isLoading || stage === 'error') && (
+          <div ref={progressSectionRef}>
+            <PhaseProgressIndicator
+              currentStage={stage}
+              currentRefIndex={sefariaProgress.current}
+              totalRefs={sefariaProgress.total}
+              error={errorMessage}
+              maxWaitSeconds={maxWaitForCurrentStage}
+              methodologyDecisionSeconds={methodologyDecisionSeconds}
+              lessonElaborationBudgetSeconds={lessonElaborationBudgetSeconds}
+              wasPrewarmed={isPrewarmedReadyForCurrentQuery}
+              onCancel={handleCancelAndRequestClarification}
+              onStageTimeout={handleStageTimeout}
+            />
+          </div>
+        )}
+
         {/* SALIDA PRINCIPAL DE LA DRASHÁ ACTIVA */}
-        {stage !== 'idle' && finalDerasha && (
+        {stage === 'complete' && finalDerasha && (
           <Suspense
             fallback={
               <div className="p-8 rounded-3xl border border-slate-800 bg-slate-900/50 text-center text-sm text-slate-400">
