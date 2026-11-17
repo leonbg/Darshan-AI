@@ -64,7 +64,7 @@ export async function executePhase3DerashaSynthesis(
     ...(baseConsultation?.active ? { halakhicConsultation: baseConsultation } : {}),
   };
 
-  const p3Result = await requestPhase3Derasha(derashaPayload);
+  const p3Result = await requestPhase3Derasha(derashaPayload, params.signal);
   const finalThinkerDet = suppressExternal
     ? undefined
     : p3Result.externalThinkerDetection ||

@@ -10,7 +10,6 @@ import {
   Flame,
   Scale,
   MessageSquarePlus,
-  Layers,
   Copy,
   Check,
 } from 'lucide-react';

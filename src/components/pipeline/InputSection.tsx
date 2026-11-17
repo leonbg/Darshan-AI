@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Sparkles,
   ArrowRight,
@@ -7,6 +7,7 @@ import {
   AlignLeft,
   Feather,
   X,
+  RotateCcw,
   Layers,
   Footprints,
   BookOpen,
@@ -26,7 +27,6 @@ import {
   History,
   Trash2,
   FileText,
-  Youtube,
 } from 'lucide-react';
 import {
   DerashaMethodology,
@@ -37,7 +37,6 @@ import {
   DerashaRelationType,
 } from '../../types';
 import {
-  evaluateMethodologyLogicGates,
   resolvePipelineMethodology,
   DERASHA_DURATION_OPTIONS,
   ResolvedMethodology,
@@ -50,7 +49,6 @@ import {
   resolveDerashaTone,
 } from '../../utils/toneAdvisor';
 import { parseCrossDerashaComparisonCommand } from '../../services/archiveService';
-import { extractYouTubeUrlFromText } from '../../services/api';
 
 interface InputSectionProps {
   query: string;
@@ -87,11 +85,10 @@ interface InputSectionProps {
     relationType: DerashaRelationType;
     userHypothesis: string;
   }) => void;
-  onOpenYouTubeStudio?: (youtubeUrl: string) => void;
-}
-
-export function detectMethodologyFromQuery(query: string): ResolvedMethodology {
-  return evaluateMethodologyLogicGates(query).enforcedMethodology;
+  onReturnHome?: () => void;
+  homeResetSignal?: number;
+  isHomeTapArmed?: boolean;
+  onClearOrReturnHome?: () => void;
 }
 
 export const METHODOLOGY_OPTIONS: Array<{
@@ -180,13 +177,6 @@ export const METHODOLOGY_OPTIONS: Array<{
   },
 ];
 
-export const AUDIENCE_PRESETS = [
-  'Comunidad general · Inspirador y práctico',
-  'Bet Midrash · Rigor académico y analítico',
-  'Jóvenes y familias · Pedagógico y vivencial',
-  'Introspección personal · Contemplativo y ético',
-];
-
 export const InputSection: React.FC<InputSectionProps> = React.memo(({
   query,
   onChangeQuery,
@@ -218,13 +208,85 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
   onOpenFullArchive,
   onRequestClarification,
   onRunCrossComparison,
-  onOpenYouTubeStudio,
+  onReturnHome,
+  homeResetSignal = 0,
+  isHomeTapArmed: isHomeTapArmedProp,
+  onClearOrReturnHome,
 }) => {
   // Collapsed by default so the UI stays clean and uncluttered
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
   const [showGateDetails, setShowGateDetails] = useState<boolean>(false);
   const [isQuickHistoryOpen, setIsQuickHistoryOpen] = useState<boolean>(false);
   const [confirmDeleteSeq, setConfirmDeleteSeq] = useState<number | null>(null);
+  const [localHomeTapArmed, setLocalHomeTapArmed] = useState<boolean>(false);
+  const lastClearTapAtRef = useRef<number>(0);
+  const clearArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isHomeTapArmed = isHomeTapArmedProp ?? localHomeTapArmed;
+
+  useEffect(() => {
+    return () => {
+      if (clearArmTimerRef.current) {
+        clearTimeout(clearArmTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (homeResetSignal > 0) {
+      setIsQuickHistoryOpen(false);
+      setIsConfigOpen(false);
+      setShowGateDetails(false);
+      setConfirmDeleteSeq(null);
+      setLocalHomeTapArmed(false);
+      lastClearTapAtRef.current = 0;
+      onFanOpenChange?.(false);
+    }
+  }, [homeResetSignal, onFanOpenChange]);
+
+  const handleClearOrDoubleTapHome = useCallback(() => {
+    if (onClearOrReturnHome) {
+      onClearOrReturnHome();
+      return;
+    }
+
+    const now = Date.now();
+    const isSecondTap = now - lastClearTapAtRef.current <= 2200;
+
+    if (clearArmTimerRef.current) {
+      clearTimeout(clearArmTimerRef.current);
+      clearArmTimerRef.current = null;
+    }
+
+    if (isSecondTap) {
+      lastClearTapAtRef.current = 0;
+      setLocalHomeTapArmed(false);
+      setIsQuickHistoryOpen(false);
+      setIsConfigOpen(false);
+      setShowGateDetails(false);
+      setConfirmDeleteSeq(null);
+      onFanOpenChange?.(false);
+      onChangeQuery('');
+      onReturnHome?.();
+      return;
+    }
+
+    // 1st tap: Clear the query box and arm a 2nd-tap window to return to start
+    onChangeQuery('');
+    lastClearTapAtRef.current = now;
+    setLocalHomeTapArmed(true);
+
+    const inputEl = document.getElementById('query-input') as HTMLTextAreaElement | null;
+    if (inputEl) {
+      inputEl.focus();
+    }
+
+    clearArmTimerRef.current = setTimeout(() => {
+      lastClearTapAtRef.current = 0;
+      setLocalHomeTapArmed(false);
+      clearArmTimerRef.current = null;
+    }, 2200);
+  }, [onClearOrReturnHome, onChangeQuery, onReturnHome, onFanOpenChange]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -279,11 +341,6 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
     [query]
   );
 
-  const detectedYoutubeUrl = useMemo(
-    () => extractYouTubeUrlFromText(query),
-    [query]
-  );
-
   const enforcedMeta = useMemo(
     () =>
       METHODOLOGY_OPTIONS.find((m) => m.id === gateEvaluation.enforcedMethodology) ||
@@ -303,13 +360,37 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
     [normalizedMetodologia]
   );
 
-  const effectiveDisplayMeta = useMemo(
-    () =>
-      gateEvaluation.externalThinkerDetection?.detected || normalizedMetodologia === 'AUTO'
-        ? enforcedMeta
-        : activeMethodologyMeta,
-    [gateEvaluation.externalThinkerDetection?.detected, normalizedMetodologia, enforcedMeta, activeMethodologyMeta]
-  );
+  const matchesCurrentDeliberation = useMemo(() => {
+    const trimmed = query.trim().toLowerCase();
+    return Boolean(
+      trimmed &&
+        deliberationResult &&
+        deliberationResult.query.trim().toLowerCase() === trimmed
+    );
+  }, [deliberationResult, query]);
+
+  const effectiveDisplayMeta = useMemo(() => {
+    if (gateEvaluation.externalThinkerDetection?.detected) {
+      return enforcedMeta;
+    }
+    if (normalizedMetodologia === 'AUTO') {
+      if (matchesCurrentDeliberation && deliberationResult?.recommendedPrimary) {
+        return (
+          METHODOLOGY_OPTIONS.find((m) => m.id === deliberationResult.recommendedPrimary) ||
+          enforcedMeta
+        );
+      }
+      return enforcedMeta;
+    }
+    return activeMethodologyMeta;
+  }, [
+    gateEvaluation.externalThinkerDetection?.detected,
+    normalizedMetodologia,
+    matchesCurrentDeliberation,
+    deliberationResult?.recommendedPrimary,
+    enforcedMeta,
+    activeMethodologyMeta,
+  ]);
 
   const activeThinkerDetection = gateEvaluation.externalThinkerDetection;
 
@@ -379,11 +460,10 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
     }
     if (
       nextOpen &&
-      query.trim().length >= 10 &&
+      query.trim().length >= 2 &&
       onDeliberateMethodology &&
       !isDeliberatingMethodology &&
-      !isPrewarmingSources &&
-      (!deliberationResult || deliberationResult.query !== query.trim())
+      !matchesCurrentDeliberation
     ) {
       onDeliberateMethodology();
     }
@@ -395,6 +475,7 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
     isDeliberatingMethodology,
     isPrewarmingSources,
     deliberationResult,
+    matchesCurrentDeliberation,
   ]);
 
   return (
@@ -603,39 +684,47 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
           </div>
         )}
 
-        {/* Highlighted Main Input Box */}
-        <textarea
-          id="query-input"
-          rows={3}
-          dir={isRtl ? 'rtl' : 'ltr'}
-          value={query}
-          onChange={(e) => onChangeQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Escribe aquí el tema, pasaje bíblico/talmúdico, ley halájica (Shulján Aruj, Minhag, Núsaj) o concepto a desarrollar..."
-          className={`w-full px-4 py-3.5 rounded-xl bg-[#050a14] border-2 border-sky-500/40 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/30 text-white placeholder-slate-400 text-base sm:text-lg leading-relaxed transition outline-none resize-y min-h-[96px] shadow-inner ${
-            isRtl ? 'font-hebrew text-right text-xl leading-relaxed' : 'font-sans'
-          }`}
-        />
+        {/* Highlighted Main Input Box with Integrated Clear / Double-Tap Home Button */}
+        <div className="relative">
+          <textarea
+            id="query-input"
+            rows={3}
+            dir={isRtl ? 'rtl' : 'ltr'}
+            value={query}
+            onChange={(e) => onChangeQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Escribe aquí el tema, pasaje bíblico/talmúdico, ley halájica (Shulján Aruj, Minhag, Núsaj) o concepto a desarrollar..."
+            className={`w-full px-4 py-3.5 rounded-xl bg-[#050a14] border-2 border-sky-500/40 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/30 text-white placeholder-slate-400 text-base sm:text-lg leading-relaxed transition outline-none resize-y min-h-[104px] shadow-inner ${
+              isRtl ? 'font-hebrew text-right text-xl leading-relaxed pl-32' : 'font-sans pr-32'
+            }`}
+          />
 
-        {/* Quick Shortcut when user pastes a YouTube URL in the main study box */}
-        {detectedYoutubeUrl && onOpenYouTubeStudio && (
-          <div className="p-3.5 rounded-xl bg-rose-950/25 border border-rose-500/35 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2.5">
-              <Youtube className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="text-slate-200 font-medium">
-                Video de YouTube detectado · Genera ilustraciones vectoriales SVG y animación escénica automáticamente.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenYouTubeStudio(detectedYoutubeUrl)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-400 hover:bg-rose-300 text-slate-950 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <Youtube className="w-3.5 h-3.5" />
-              <span>Crear Ilustraciones y Animación</span>
-            </button>
-          </div>
-        )}
+          <button
+            type="button"
+            onClick={handleClearOrDoubleTapHome}
+            className={`absolute top-2.5 ${
+              isRtl ? 'left-2.5' : 'right-2.5'
+            } inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer select-none shadow-sm z-10 ${
+              isHomeTapArmed
+                ? 'bg-amber-400 border-amber-300 text-slate-950 shadow-[0_0_16px_-3px_rgba(251,191,36,0.65)]'
+                : 'bg-slate-800/95 hover:bg-slate-700 border-slate-600/80 hover:border-sky-400/60 text-slate-100 hover:text-white'
+            }`}
+            title="1 toque: limpiar recuadro de consulta · 2 toques: volver al inicio de la aplicación (cierra historial o cualquier sección)"
+            aria-label="Limpiar recuadro de consulta o tocar dos veces para volver al inicio"
+          >
+            {isHomeTapArmed ? (
+              <>
+                <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                <span>2º toque: Inicio</span>
+              </>
+            ) : (
+              <>
+                <X className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span>Limpiar</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Live Indicator when a Natural Language Cross-Derashá Comparison Command is Detected */}
         {detectedCrossComparison && detectedCrossComparison.isCrossDerashaComparison && (
@@ -704,127 +793,34 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
           </div>
         )}
 
-        {/* Live Pipeline Module Indicator when an External Philosopher/Thinker is Detected */}
+        {/* Compact Pipeline Indicator when an External Philosopher/Thinker is Detected */}
         {activeThinkerDetection?.detected && (
-          <div className="p-3.5 rounded-xl bg-rose-950/25 border border-rose-500/35 space-y-2.5 text-xs animate-fadeIn">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Scale className="w-4 h-4 text-rose-400 shrink-0" />
-                <span className="font-bold text-rose-200">
-                  Módulo del Pipeline Activo · Pensador Externo Detectado:{' '}
-                  <span className="text-white">{activeThinkerDetection.thinkerName}</span>
+          <div className="px-3 py-2 rounded-xl bg-rose-950/25 border border-rose-500/30 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+            <div className="flex items-center gap-2 text-rose-200">
+              <Scale className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>
+                Contraste filosófico activo:{' '}
+                <strong className="text-white">{activeThinkerDetection.thinkerName}</strong>{' '}
+                <span className="text-slate-400">
+                  ({activeThinkerDetection.forcedExegeticalSefariaRefs.length} fuentes canónicas de apoyo)
                 </span>
-              </div>
-              <span className="px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-400/30 text-rose-200 font-mono text-[10px]">
-                Búsqueda Exegética Forzada ({activeThinkerDetection.forcedExegeticalSefariaRefs.length} fuentes Sefaria)
               </span>
-            </div>
-
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              <strong className="text-amber-300">Concepto a contrastar con la cosmovisión judía:</strong>{' '}
-              {activeThinkerDetection.specificPhilosophicalConcept} ·{' '}
-              <span className="text-slate-400">
-                El pipeline fuerza el contraste explícito de{' '}
-                <strong className="text-sky-300">Universalidad vs. Especificidad del Mandamiento</strong>.
-              </span>
-            </p>
-
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {activeThinkerDetection.forcedExegeticalSefariaRefs.map((refObj) => {
-                const badgeColor =
-                  refObj.contrastRole === 'UNIVERSALIDAD_TORAH'
-                    ? 'bg-sky-500/15 border-sky-400/35 text-sky-200'
-                    : refObj.contrastRole === 'ESPECIFICIDAD_MITZVA'
-                    ? 'bg-amber-500/15 border-amber-400/35 text-amber-200'
-                    : 'bg-emerald-500/15 border-emerald-400/35 text-emerald-200';
-                const axisLabel =
-                  refObj.contrastRole === 'UNIVERSALIDAD_TORAH'
-                    ? 'Universalidad'
-                    : refObj.contrastRole === 'ESPECIFICIDAD_MITZVA'
-                    ? 'Especificidad Mitzvá'
-                    : 'Cosmovisión / Teonomía';
-                return (
-                  <span
-                    key={refObj.ref}
-                    title={refObj.rationale}
-                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[10px] font-medium ${badgeColor}`}
-                  >
-                    <span className="font-bold">
-                      {refObj.ref} ({refObj.heRef})
-                    </span>
-                    <span className="opacity-75">· {axisLabel}</span>
-                  </span>
-                );
-              })}
             </div>
           </div>
         )}
 
-        {/* Live Pipeline Halakhic Validator & Shulchan Arukh Module Indicator */}
+        {/* Compact Halakhic Validator Indicator */}
         {gateEvaluation.halakhicValidation?.isPurelyHalakhic && (
-          <div className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-500/35 space-y-2.5 text-xs animate-fadeIn">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="font-bold text-emerald-200">
-                  Módulo Halájico del Shulján Aruj Activo ·{' '}
-                  <span className="text-white">
-                    {gateEvaluation.halakhicConsultation?.consultedBranchLabels.length
-                      ? gateEvaluation.halakhicConsultation.consultedBranchLabels.join(' · ')
-                      : 'Consulta de Carácter Puramente Halájico'}
-                  </span>
-                </span>
-              </div>
-              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/35 text-emerald-200 font-mono text-[10px]">
-                Filosofía Externa / Comparativa: OMITIDA
+          <div className="px-3 py-2 rounded-xl bg-emerald-950/25 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+            <div className="flex items-center gap-2 text-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>
+                Enfoque halájico (Shulján Aruj · Mejaber y Ramá):{' '}
+                <strong className="text-white">
+                  {gateEvaluation.halakhicValidation.halakhicDomainLabels.join(' · ') || 'Halajá y Minhag'}
+                </strong>
               </span>
             </div>
-
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              <strong className="text-emerald-300">Leyes consultadas en Shulján Aruj:</strong>{' '}
-              {gateEvaluation.halakhicValidation.halakhicDomainLabels.join(' · ')}.{' '}
-              <span className="text-slate-400">
-                El módulo consulta leyes específicas de rezos, festividades o kashrut e integra citas breves y directas del{' '}
-                <strong className="text-amber-300">Shulján Aruj (Mejaber y Ramá)</strong>,{' '}
-                <strong className="text-sky-300">Minhag y Núsaj</strong>, omitiendo toda inyección de filosofía externa o comparativa.
-              </span>
-            </p>
-
-            {gateEvaluation.halakhicConsultation?.active &&
-            gateEvaluation.halakhicConsultation.directQuotes.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
-                {gateEvaluation.halakhicConsultation.directQuotes.slice(0, 4).map((q) => (
-                  <div
-                    key={q.id}
-                    className="flex items-start gap-2 p-2 rounded-lg bg-slate-950/60 border border-emerald-500/25 text-[11px]"
-                  >
-                    <ScrollText className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                      <div className="font-semibold text-emerald-200 truncate">
-                        {q.simanSeifLabel} · {q.topicLabel}
-                      </div>
-                      <div className="text-[10px] text-slate-400 truncate" dir="rtl">
-                        {q.briefHebrewQuote}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              gateEvaluation.halakhicValidation.recommendedHalakhicSources.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {gateEvaluation.halakhicValidation.recommendedHalakhicSources.map((srcRef) => (
-                    <span
-                      key={srcRef}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-[10px] font-medium text-emerald-200"
-                    >
-                      <ScrollText className="w-3 h-3 text-emerald-400 shrink-0" />
-                      <span>{srcRef}</span>
-                    </span>
-                  ))}
-                </div>
-              )
-            )}
           </div>
         )}
 
@@ -954,19 +950,35 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
                     <span>Acotar</span>
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => onChangeQuery('')}
-                  disabled={isLoading}
-                  className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 transition cursor-pointer"
-                  title="Limpiar consulta"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Limpiar</span>
-                </button>
               </>
             )}
+
+            <button
+              type="button"
+              onClick={handleClearOrDoubleTapHome}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer select-none ${
+                isHomeTapArmed
+                  ? 'bg-amber-400 border-amber-300 text-slate-950 shadow-[0_0_16px_-4px_rgba(251,191,36,0.65)]'
+                  : 'bg-slate-800/95 hover:bg-slate-700 border-slate-600/80 hover:border-sky-400/60 text-slate-100 hover:text-white'
+              }`}
+              title="1 toque: limpiar recuadro de consulta · 2 toques: volver al inicio de la aplicación (cierra historial o cualquier sección)"
+              aria-label="Limpiar consulta o tocar dos veces para volver al inicio de la aplicación"
+            >
+              {isHomeTapArmed ? (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                  <span>2º toque: Inicio</span>
+                </>
+              ) : (
+                <>
+                  <X className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span>Limpiar</span>
+                  <span className="hidden sm:inline text-[10px] text-slate-300 font-normal">
+                    · 2× Inicio
+                  </span>
+                </>
+              )}
+            </button>
 
             <button
               type="button"
@@ -1044,36 +1056,98 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
             </div>
 
             {/* Deep AI Methodology Deliberation Results (if evaluated) */}
-            {deliberationResult && deliberationResult.query === query.trim() && (
+            {matchesCurrentDeliberation && deliberationResult && (
               <div className="p-3.5 rounded-xl bg-[#090f1d] border border-slate-800 space-y-2.5 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold text-amber-300 flex items-center gap-1.5">
                     <Wand2 className="w-3.5 h-3.5" />
                     <span>
-                      Dictamen de Deliberación Multi-Metodológica
-                      {deliberationResult.deliberationTimeMs
-                        ? ` (${(deliberationResult.deliberationTimeMs / 1000).toFixed(1)}s · sin descontar tiempo a la Drashá)`
+                      Dictamen Calibrado Multi-Metodológico
+                      {deliberationResult.deliberationTimeMs !== undefined
+                        ? ` (${(deliberationResult.deliberationTimeMs / 1000).toFixed(2)}s · sin descontar tiempo a la Drashá)`
                         : ''}
                     </span>
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChangeMetodologia(deliberationResult.recommendedPrimary);
-                      const targetComp =
-                        duracion === '30_MIN'
-                          ? deliberationResult.recommendedComplementaryFor30Min
-                          : duracion === '10_MIN'
-                          ? deliberationResult.recommendedComplementaryFor10Min
-                          : [];
-                      onChangeMetodologiasComplementarias(targetComp);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 font-semibold text-[11px] transition cursor-pointer"
-                  >
-                    Aplicar combinación recomendada
-                  </button>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {deliberationResult.decisionCalibration?.needsClarification &&
+                      onRequestClarification && (
+                        <button
+                          type="button"
+                          onClick={onRequestClarification}
+                          className="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 font-semibold text-[11px] transition cursor-pointer"
+                        >
+                          Acotar consulta
+                        </button>
+                      )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChangeMetodologia(deliberationResult.recommendedPrimary);
+                        const targetComp =
+                          duracion === '30_MIN'
+                            ? deliberationResult.recommendedComplementaryFor30Min
+                            : duracion === '10_MIN'
+                            ? deliberationResult.recommendedComplementaryFor10Min
+                            : [];
+                        onChangeMetodologiasComplementarias(targetComp);
+                        if (deliberationResult.recommendedTone) {
+                          onChangeTonoHomiletico?.(deliberationResult.recommendedTone);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 font-semibold text-[11px] transition cursor-pointer"
+                    >
+                      Aplicar combinación recomendada
+                    </button>
+                  </div>
                 </div>
+
+                {deliberationResult.decisionCalibration && (
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px]">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700/90 text-slate-200">
+                      Confianza metodológica:{' '}
+                      <strong className="text-sky-300 font-mono">
+                        {Math.round(deliberationResult.decisionCalibration.primaryConfidence * 100)}%
+                      </strong>
+                    </span>
+
+                    <span
+                      className={`px-2 py-0.5 rounded-md border ${
+                        deliberationResult.decisionCalibration.needsClarification
+                          ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                          : 'bg-emerald-950/35 border-emerald-500/35 text-emerald-200'
+                      }`}
+                    >
+                      Especificidad:{' '}
+                      <strong className="font-mono">
+                        {deliberationResult.decisionCalibration.specificityNormalized}%
+                      </strong>{' '}
+                      · {deliberationResult.decisionCalibration.specificityLevelLabel}
+                    </span>
+
+                    {deliberationResult.decisionCalibration.isPurelyHalakhic ? (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-950/35 border border-emerald-500/35 text-emerald-200">
+                        Ámbito halájico normativo (
+                        {Math.round(
+                          deliberationResult.decisionCalibration.halakhicProbability * 100
+                        )}
+                        %)
+                      </span>
+                    ) : deliberationResult.decisionCalibration.requiresExternalContrast ? (
+                      <span className="px-2 py-0.5 rounded-md bg-rose-950/35 border border-rose-500/35 text-rose-200">
+                        Contraste filosófico externo (
+                        {Math.round(
+                          deliberationResult.decisionCalibration.externalContrastProbability * 100
+                        )}
+                        %)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-slate-300">
+                        Exégesis interna de la Torá
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <p className="text-[11px] text-slate-300 leading-relaxed">
                   {deliberationResult.deliberationSummary}
@@ -1085,10 +1159,24 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
                       const meta =
                         METHODOLOGY_OPTIONS.find((m) => m.id === cand.methodology) ||
                         METHODOLOGY_OPTIONS[3];
+                      const barWidthClass =
+                        cand.relevanceScore >= 85
+                          ? 'w-full'
+                          : cand.relevanceScore >= 70
+                          ? 'w-4/5'
+                          : cand.relevanceScore >= 55
+                          ? 'w-3/5'
+                          : cand.relevanceScore >= 40
+                          ? 'w-2/5'
+                          : cand.relevanceScore >= 25
+                          ? 'w-1/4'
+                          : cand.relevanceScore >= 12
+                          ? 'w-1/6'
+                          : 'w-1/12';
                       return (
                         <div
                           key={cand.methodology}
-                          className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/90 space-y-1"
+                          className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/90 space-y-1.5"
                         >
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-bold text-white text-[11px] truncate">
@@ -1097,6 +1185,9 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
                             <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 font-mono text-[10px]">
                               {cand.relevanceScore}%
                             </span>
+                          </div>
+                          <div className="w-full h-1 rounded-full bg-slate-900 overflow-hidden">
+                            <div className={`h-full bg-sky-400/80 rounded-full ${barWidthClass}`} />
                           </div>
                           <p className="text-[10px] text-slate-400 leading-snug line-clamp-2">
                             {cand.whyApplicable}

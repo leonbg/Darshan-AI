@@ -148,6 +148,17 @@ export function normalizeClientSefariaRef(rawRef: string): string {
  */
 const sefariaClientCache = new Map<string, VerifiedSefariaSource>();
 const inFlightClientSefariaRequests = new Map<string, Promise<VerifiedSefariaSource>>();
+const MAX_CLIENT_SEFARIA_CACHE = 200;
+
+function setClientSefariaCache(key: string, val: VerifiedSefariaSource) {
+  if (sefariaClientCache.has(key)) {
+    sefariaClientCache.delete(key);
+  } else if (sefariaClientCache.size >= MAX_CLIENT_SEFARIA_CACHE) {
+    const oldest = sefariaClientCache.keys().next().value;
+    if (oldest !== undefined) sefariaClientCache.delete(oldest);
+  }
+  sefariaClientCache.set(key, val);
+}
 
 export async function fetchSefariaCanonicalSource(rawRef: string): Promise<VerifiedSefariaSource> {
   const cleanRef = normalizeClientSefariaRef(rawRef);
@@ -190,7 +201,7 @@ export async function fetchSefariaCanonicalSource(rawRef: string): Promise<Verif
               verified: true,
               statusText: proxyData.statusText || 'Verificado en Sefaria v3',
             };
-            sefariaClientCache.set(cacheKey, verifiedFromServer);
+            setClientSefariaCache(cacheKey, verifiedFromServer);
             return verifiedFromServer;
           }
         }
@@ -263,7 +274,7 @@ export async function fetchSefariaCanonicalSource(rawRef: string): Promise<Verif
         verified: true,
         statusText: 'Verificado en Sefaria v3',
       };
-      sefariaClientCache.set(cacheKey, verifiedResult);
+      setClientSefariaCache(cacheKey, verifiedResult);
       return verifiedResult;
     } catch {
       const gracefulFallback: VerifiedSefariaSource = {

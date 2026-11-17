@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollText, Flame, Footprints, BookOpen, GitBranch, Youtube } from 'lucide-react';
+import { ScrollText, Flame, Footprints, BookOpen, GitBranch } from 'lucide-react';
 import { WorkspaceTab } from './Header';
 import { HubTab } from '../discovery/SuggestedTopicsHub';
 
@@ -8,7 +8,6 @@ interface WorkspaceNavigationBarProps {
   activeHubTab?: HubTab;
   onSelectStudyModality: (tab: HubTab) => void;
   onOpenArchiveModality: () => void;
-  onOpenYouTubeStudio?: () => void;
   parashaNameEs?: string;
   nextEventNameEs?: string;
   archiveCount: number;
@@ -20,13 +19,11 @@ export const WorkspaceNavigationBar: React.FC<WorkspaceNavigationBarProps> = Rea
     activeHubTab = 'parasha',
     onSelectStudyModality,
     onOpenArchiveModality,
-    onOpenYouTubeStudio,
     parashaNameEs,
     nextEventNameEs,
     archiveCount,
   }) => {
     const isArchiveMode = workspaceMode === 'archivo';
-    const isYouTubeMode = workspaceMode === 'youtube';
 
     return (
       <div
@@ -111,21 +108,6 @@ export const WorkspaceNavigationBar: React.FC<WorkspaceNavigationBarProps> = Rea
             <GitBranch className="w-3.5 h-3.5 shrink-0" />
             <span>Archivo y Comparador (#1–#{archiveCount})</span>
           </button>
-
-          {onOpenYouTubeStudio && (
-            <button
-              type="button"
-              onClick={onOpenYouTubeStudio}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                isYouTubeMode
-                  ? 'bg-rose-400 text-slate-950 shadow-sm'
-                  : 'bg-[#0c1426] border border-slate-800 text-slate-200 hover:text-white hover:border-rose-500/40'
-              }`}
-            >
-              <Youtube className="w-3.5 h-3.5 shrink-0" />
-              <span>YouTube → Ilustraciones y Animaciones</span>
-            </button>
-          )}
         </div>
       </div>
     );

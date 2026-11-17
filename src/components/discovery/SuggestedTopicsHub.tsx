@@ -122,7 +122,7 @@ export const SuggestedTopicsHub: React.FC<SuggestedTopicsHubProps> = React.memo(
   onSelectSample,
   requestedTab,
 }) => {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<HubTab>('parasha');
 
   useEffect(() => {

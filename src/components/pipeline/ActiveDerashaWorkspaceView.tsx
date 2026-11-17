@@ -16,6 +16,7 @@ import {
   FollowUpItem,
   Phase1AnalysisResult,
   VerifiedSefariaSource,
+  MishnatHaDorotQuote,
 } from '../../types';
 import { ExportScope } from '../layout/ExportModal';
 import { AtrilReadingScale } from '../../hooks/useAtrilPreferences';
@@ -58,6 +59,7 @@ interface ActiveDerashaWorkspaceViewProps {
     focusMaster: 'all' | 'sacks' | 'gordon' | 'soloveitchik' | 'hirsch',
     specificAngle?: string
   ) => Promise<void>;
+  onSaveMishnatHaDorotQuotes?: (quotes: MishnatHaDorotQuote[]) => void;
 }
 
 export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProps> = React.memo(
@@ -84,6 +86,7 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
     onTranslateSource,
     onTranslateAllSources,
     onRequestMasterReadings,
+    onSaveMishnatHaDorotQuotes,
   }) => {
     const [viewMode, setViewMode] = useState<'essay' | 'summary' | 'cards'>('essay');
     const [isDeepBreakdownOpen, setIsDeepBreakdownOpen] = useState(false);
@@ -251,6 +254,7 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
               onTranslateAllSources={onTranslateAllSources}
               isTranslatingRef={translatingRef}
               isTranslatingAll={isTranslatingAll}
+              onSaveMishnatHaDorotQuotes={onSaveMishnatHaDorotQuotes}
             />
           </section>
         ) : viewMode === 'summary' ? (

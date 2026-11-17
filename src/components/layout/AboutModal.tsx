@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, BookOpen, Layers, ShieldCheck, Compass, Sparkles } from 'lucide-react';
+import { X, ShieldCheck, Compass } from 'lucide-react';
 
 interface AboutModalProps {
   isOpen: boolean;

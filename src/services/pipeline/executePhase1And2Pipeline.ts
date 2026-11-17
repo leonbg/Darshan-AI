@@ -34,12 +34,20 @@ export async function executePhase1And2Pipeline(
     params.metodologiasComplementarias
   );
 
+  const isAutoRequested = !params.requestedMethodology || params.requestedMethodology === 'AUTO';
+  const hasExplicitComplementary =
+    Array.isArray(params.metodologiasComplementarias) &&
+    params.metodologiasComplementarias.length > 0;
+
   const p1Result = await requestPhase1Analysis(params.effectiveQuery, {
-    metodologia: resolution.resolvedMethodology,
+    metodologia: isAutoRequested ? 'AUTO' : resolution.resolvedMethodology,
     audiencia_o_tono: params.audienciaOTono,
     tono_homiletico: params.tonoHomiletico,
     duracion: params.duracion,
-    metodologias_complementarias: resolution.complementaryMethodologies,
+    metodologias_complementarias: hasExplicitComplementary
+      ? resolution.complementaryMethodologies
+      : [],
+    signal: params.signal,
   });
 
   const halakhicValidation =
@@ -179,12 +187,28 @@ export async function resolvePrewarmedOrExecutePhase1And2(
       rawConsultation,
       activeFetchedSources
     );
+    const isAutoRequested = !params.requestedMethodology || params.requestedMethodology === 'AUTO';
+    const maxComp = params.duracion === '5_MIN' ? 0 : params.duracion === '10_MIN' ? 1 : 2;
+    const prewarmPrimary =
+      isAutoRequested &&
+      params.prewarmedCache.phase1Data.detectedMetodologia &&
+      params.prewarmedCache.phase1Data.detectedMetodologia !== 'AUTO'
+        ? params.prewarmedCache.phase1Data.detectedMetodologia
+        : resolution.resolvedMethodology;
+    const prewarmComp =
+      isAutoRequested &&
+      (!params.metodologiasComplementarias || params.metodologiasComplementarias.length === 0) &&
+      Array.isArray(params.prewarmedCache.phase1Data.metodologiasComplementarias) &&
+      params.prewarmedCache.phase1Data.metodologiasComplementarias.length > 0
+        ? params.prewarmedCache.phase1Data.metodologiasComplementarias.slice(0, maxComp)
+        : resolution.complementaryMethodologies;
+
     const activeP1Data: Phase1AnalysisResult = sanitizeHalakhicOutputFromExternalCitations(
       {
         ...params.prewarmedCache.phase1Data,
-        detectedMetodologia: resolution.resolvedMethodology,
+        detectedMetodologia: prewarmPrimary,
         duracion: params.duracion,
-        metodologiasComplementarias: resolution.complementaryMethodologies,
+        metodologiasComplementarias: prewarmComp,
         logicGateReason: params.logicGateExplanation,
         ...(halakhicValidation ? { halakhicValidation } : {}),
         ...(enrichedConsultation?.active ? { halakhicConsultation: enrichedConsultation } : {}),
@@ -194,8 +218,8 @@ export async function resolvePrewarmedOrExecutePhase1And2(
     return {
       phase1Data: activeP1Data,
       verifiedSources: activeFetchedSources,
-      resolvedMethodology: resolution.resolvedMethodology,
-      complementaryMethodologies: resolution.complementaryMethodologies,
+      resolvedMethodology: prewarmPrimary as any,
+      complementaryMethodologies: prewarmComp as any,
       loadedViaPrewarm: true,
       cancelled: false,
     };
@@ -229,12 +253,28 @@ export async function resolvePrewarmedOrExecutePhase1And2(
         rawConsultation,
         activeFetchedSources
       );
+      const isAutoRequested = !params.requestedMethodology || params.requestedMethodology === 'AUTO';
+      const maxComp = params.duracion === '5_MIN' ? 0 : params.duracion === '10_MIN' ? 1 : 2;
+      const prewarmPrimary =
+        isAutoRequested &&
+        prewarmed.phase1Data.detectedMetodologia &&
+        prewarmed.phase1Data.detectedMetodologia !== 'AUTO'
+          ? prewarmed.phase1Data.detectedMetodologia
+          : resolution.resolvedMethodology;
+      const prewarmComp =
+        isAutoRequested &&
+        (!params.metodologiasComplementarias || params.metodologiasComplementarias.length === 0) &&
+        Array.isArray(prewarmed.phase1Data.metodologiasComplementarias) &&
+        prewarmed.phase1Data.metodologiasComplementarias.length > 0
+          ? prewarmed.phase1Data.metodologiasComplementarias.slice(0, maxComp)
+          : resolution.complementaryMethodologies;
+
       const activeP1Data: Phase1AnalysisResult = sanitizeHalakhicOutputFromExternalCitations(
         {
           ...prewarmed.phase1Data,
-          detectedMetodologia: resolution.resolvedMethodology,
+          detectedMetodologia: prewarmPrimary,
           duracion: params.duracion,
-          metodologiasComplementarias: resolution.complementaryMethodologies,
+          metodologiasComplementarias: prewarmComp,
           logicGateReason: params.logicGateExplanation,
           ...(halakhicValidation ? { halakhicValidation } : {}),
           ...(enrichedConsultation?.active ? { halakhicConsultation: enrichedConsultation } : {}),
@@ -244,8 +284,8 @@ export async function resolvePrewarmedOrExecutePhase1And2(
       return {
         phase1Data: activeP1Data,
         verifiedSources: activeFetchedSources,
-        resolvedMethodology: resolution.resolvedMethodology,
-        complementaryMethodologies: resolution.complementaryMethodologies,
+        resolvedMethodology: prewarmPrimary as any,
+        complementaryMethodologies: prewarmComp as any,
         loadedViaPrewarm: true,
         cancelled: false,
       };
@@ -263,6 +303,7 @@ export async function resolvePrewarmedOrExecutePhase1And2(
     audienciaOTono: params.audienciaOTono,
     tonoHomiletico: params.tonoHomiletico,
     maxRefs: maxRefsForDuration,
+    signal: params.signal,
     onStageChange: params.onStageChange,
     onPhase1Complete: params.onPhase1Complete,
     onSefariaProgress: params.onSefariaProgress,

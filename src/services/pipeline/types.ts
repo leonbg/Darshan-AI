@@ -21,6 +21,7 @@ export interface Phase1And2PipelineParams {
   audienciaOTono: string;
   tonoHomiletico?: DerashaTone;
   maxRefs?: number;
+  signal?: AbortSignal;
   onStageChange?: (stage: 'phase1_morphology' | 'phase2_sefaria') => void;
   onPhase1Complete?: (phase1Data: Phase1AnalysisResult) => void;
   onSefariaProgress?: (current: number, total: number) => void;
@@ -56,6 +57,7 @@ export interface Phase3DerashaSynthesisParams {
   phase1Data: Phase1AnalysisResult;
   verifiedSources: VerifiedSefariaSource[];
   fallbackThinkerDetection?: Phase1AnalysisResult['externalThinkerDetection'];
+  signal?: AbortSignal;
 }
 
 export interface Phase3DerashaSynthesisResult {

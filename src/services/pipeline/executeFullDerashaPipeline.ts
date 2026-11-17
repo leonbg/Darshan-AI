@@ -23,6 +23,7 @@ export interface ExecuteFullDerashaPipelineParams {
   tonoHomiletico?: DerashaTone;
   prewarmedCache: PrewarmedPipelineCache | null;
   inFlightPrewarmPromise: Promise<PrewarmedPipelineCache | null> | null;
+  signal?: AbortSignal;
   isRunStillActive: () => boolean;
   onStageChange: (stage: PipelineStage) => void;
   onPhase1Complete: (phase1Data: Phase1AnalysisResult) => void;
@@ -65,6 +66,7 @@ export async function executeFullDerashaPipeline(
     prewarmedCache: params.prewarmedCache,
     inFlightPrewarmPromise: params.inFlightPrewarmPromise,
     logicGateExplanation: pipelineResolution.evaluation.explanation,
+    signal: params.signal,
     isRunStillActive: params.isRunStillActive,
     onStageChange: params.onStageChange,
     onPhase1Complete: params.onPhase1Complete,
@@ -92,6 +94,7 @@ export async function executeFullDerashaPipeline(
     phase1Data: p1And2Result.phase1Data,
     verifiedSources: p1And2Result.verifiedSources,
     fallbackThinkerDetection: pipelineResolution.evaluation.externalThinkerDetection,
+    signal: params.signal,
   });
 
   if (!params.isRunStillActive()) {
@@ -115,7 +118,6 @@ export function isPipelineTimeoutOrUnavailableError(err: any): boolean {
   return (
     err instanceof LongWaitTimeoutError ||
     err?.name === 'LongWaitTimeoutError' ||
-    String(err?.message || '').includes('tiempo de espera') ||
-    String(err?.message || '').includes('No hay respuestas disponibles de momento')
+    err?.errorCode === 'AI_TIMEOUT'
   );
 }

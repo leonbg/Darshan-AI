@@ -1,26 +1,42 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import { Header, type WorkspaceTab } from './components/layout/Header';
+import { WorkspaceNavigationBar } from './components/layout/WorkspaceNavigationBar';
+import { OfflineIndicator } from './components/layout/OfflineIndicator';
+import type { ExportScope } from './utils/export/shared';
+import type { SettingsModalTab } from './components/layout/SettingsModal';
+import { InputSection } from './components/pipeline/InputSection';
+import { PhaseProgressIndicator } from './components/pipeline/PhaseProgressIndicator';
 import {
-  Header,
-  WorkspaceTab,
-  WorkspaceNavigationBar,
-  AboutModal,
-  ExportModal,
-  ExportScope,
-  SettingsModal,
-  SettingsModalTab,
-  OfflineIndicator,
-} from './components/layout';
-import {
-  InputSection,
-  PhaseProgressIndicator,
   QueryClarificationNotice,
-  ClarificationState,
+  type ClarificationState,
   buildRefinementsForQuery,
-  ActiveDerashaWorkspaceView,
-} from './components/pipeline';
-import { SuggestedTopicsHub, HubTab } from './components/discovery';
-import { DerashotArchiveHub } from './components/archive';
-import { YouTubeVisualStudio } from './components/youtube';
+} from './components/pipeline/QueryClarificationNotice';
+import type { HubTab } from './components/discovery/SuggestedTopicsHub';
+
+const AboutModal = lazy(() =>
+  import('./components/layout/AboutModal').then((m) => ({ default: m.AboutModal }))
+);
+const ExportModal = lazy(() =>
+  import('./components/layout/ExportModal').then((m) => ({ default: m.ExportModal }))
+);
+const SettingsModal = lazy(() =>
+  import('./components/layout/SettingsModal').then((m) => ({ default: m.SettingsModal }))
+);
+const ActiveDerashaWorkspaceView = lazy(() =>
+  import('./components/pipeline/ActiveDerashaWorkspaceView').then((m) => ({
+    default: m.ActiveDerashaWorkspaceView,
+  }))
+);
+const SuggestedTopicsHub = lazy(() =>
+  import('./components/discovery/SuggestedTopicsHub').then((m) => ({
+    default: m.SuggestedTopicsHub,
+  }))
+);
+const DerashotArchiveHub = lazy(() =>
+  import('./components/archive/DerashotArchiveHub').then((m) => ({
+    default: m.DerashotArchiveHub,
+  }))
+);
 import {
   useAtrilPreferences,
   useTorahCalendar,
@@ -45,6 +61,7 @@ import {
 import {
   enrichQueryWithCalendar,
   isQueryTooBroadOrAmbiguous,
+  shouldAutoPrewarmQuery,
   executePhase1And2Pipeline,
   executeDurationOrComplementaryResynthesis,
   executeFullDerashaPipeline,
@@ -63,6 +80,7 @@ import {
   ArchivedDerashaEntry,
   ComparativeDerashaAnalysisResult,
   DerashaRelationType,
+  MishnatHaDorotQuote,
 } from './types';
 import { composeAudienceAndTone } from './utils/toneAdvisor';
 import { AlertTriangle, ShieldCheck, RotateCcw, HardDrive } from 'lucide-react';
@@ -94,10 +112,12 @@ export default function App() {
     null
   );
 
-  // Top-level Workspace Mode ('estudio' | 'calendario' | 'archivo' | 'youtube' | 'todo')
+  // Top-level Workspace Mode ('estudio' | 'calendario' | 'archivo' | 'todo')
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceTab>('estudio');
-  const [youtubeBridgeUrl, setYoutubeBridgeUrl] = useState<string | null>(null);
-  const [youtubeAutoTriggerSignal, setYoutubeAutoTriggerSignal] = useState<number>(0);
+  const [homeResetSignal, setHomeResetSignal] = useState<number>(0);
+  const [isHomeTapArmed, setIsHomeTapArmed] = useState<boolean>(false);
+  const lastClearTapAtRef = useRef<number>(0);
+  const clearArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Custom Hook: Lectern / Bima Typography & Reading Scale Preferences
   const {
@@ -147,6 +167,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [clarificationState, setClarificationState] = useState<ClarificationState | null>(null);
   const activeRunIdRef = useRef<number>(0);
+  const skipNextAutoSaveRef = useRef<boolean>(false);
 
   // Pipeline data
   const [phase1Data, setPhase1Data] = useState<Phase1AnalysisResult | null>(null);
@@ -166,6 +187,7 @@ export default function App() {
     verifiedSources: VerifiedSefariaSource[];
   } | null>(null);
   const deliberationAbortRef = useRef<AbortController | null>(null);
+  const pipelineAbortRef = useRef<AbortController | null>(null);
   const inFlightPrewarmPromiseRef = useRef<{
     query: string;
     promise: Promise<{
@@ -200,6 +222,7 @@ export default function App() {
     derashotArchive,
     comparativeStudies,
     prewarmedCache,
+    deliberationResult,
     clarificationState,
     requestedHubTab,
   });
@@ -219,6 +242,7 @@ export default function App() {
     derashotArchive,
     comparativeStudies,
     prewarmedCache,
+    deliberationResult,
     clarificationState,
     requestedHubTab,
   };
@@ -250,6 +274,7 @@ export default function App() {
         setVerifiedSources(act.verifiedSources || []);
         setFinalDerasha(act.finalDerasha);
         setFollowUps(act.followUps || []);
+        skipNextAutoSaveRef.current = true;
         setStage('complete');
       } else {
         setStage('idle');
@@ -292,6 +317,7 @@ export default function App() {
           setVerifiedSources(Array.isArray(parsed.verifiedSources) ? parsed.verifiedSources : []);
           setFinalDerasha(parsed.finalDerasha);
           setFollowUps(Array.isArray(parsed.followUps) ? parsed.followUps : []);
+          skipNextAutoSaveRef.current = true;
           setStage('complete');
         }
       }
@@ -303,6 +329,11 @@ export default function App() {
   // Persist completed study in localStorage, save/update in the numbered Derashot Archive, and refresh Auto Safe Point
   useEffect(() => {
     if (stage === 'complete' && finalDerasha && phase1Data) {
+      if (skipNextAutoSaveRef.current) {
+        skipNextAutoSaveRef.current = false;
+        return;
+      }
+
       const studyQueryToSave = completedStudyQuery || query;
       const savedAt = new Date().toISOString();
       const activeSnapshot = {
@@ -328,8 +359,9 @@ export default function App() {
         }
       }
 
-      setDerashotArchive((prev) => {
-        const { updatedArchive } = buildAndSaveDerashaToArchive(prev, {
+      const { updatedArchive } = buildAndSaveDerashaToArchive(
+        latestStateRef.current.derashotArchive,
+        {
           query: studyQueryToSave,
           methodology: finalDerasha.metodologia || metodologia,
           complementaryMethodologies:
@@ -340,16 +372,17 @@ export default function App() {
           verifiedSources,
           finalDerasha,
           followUps,
-        });
-        createSystemSafePoint({
-          triggerType: 'auto',
-          archive: updatedArchive,
-          comparativeStudies: latestStateRef.current.comparativeStudies,
-          activeStudy: activeSnapshot,
-        });
-        refreshSafePoints();
-        return updatedArchive;
+        }
+      );
+
+      setDerashotArchive(updatedArchive);
+      createSystemSafePoint({
+        triggerType: 'auto',
+        archive: updatedArchive,
+        comparativeStudies: latestStateRef.current.comparativeStudies,
+        activeStudy: activeSnapshot,
       });
+      refreshSafePoints();
     }
   }, [
     stage,
@@ -375,12 +408,12 @@ export default function App() {
   );
 
   const lessonElaborationBudgetSeconds = useMemo(
-    () => (duracion === '30_MIN' ? 600 : duracion === '10_MIN' ? 420 : 300),
+    () => (duracion === '30_MIN' ? 180 : duracion === '10_MIN' ? 150 : 120),
     [duracion]
   );
 
   const maxWaitForCurrentStage = useMemo(
-    () => (stage === 'phase3_derasha' ? lessonElaborationBudgetSeconds : 240),
+    () => (stage === 'phase3_derasha' ? lessonElaborationBudgetSeconds : 120),
     [stage, lessonElaborationBudgetSeconds]
   );
 
@@ -421,15 +454,25 @@ export default function App() {
   }, [isMethodologyFanOpen, isDeliberatingMethodology, isLoading]);
 
   const handleStageTimeout = useCallback(() => {
-    const currentQ = latestStateRef.current.query;
+    const st = latestStateRef.current;
+    const currentQ = st.query;
+    const activeTitle = st.finalDerasha?.derashaTitle || st.phase1Data?.title;
+    const activeQ = st.completedStudyQuery;
     activeRunIdRef.current += 1;
+    pipelineAbortRef.current?.abort();
+    pipelineAbortRef.current = null;
     setStage('idle');
     setClarificationState({
       mode: 'timeout_unavailable',
       originalQuery: currentQ,
+      activeStudyTitle: activeTitle,
+      activeStudyQuery: activeQ,
       reason:
         'No hay respuestas disponibles de momento porque la fase actual superó el tiempo máximo de espera. Puedes elegir una formulación más acotada aquí abajo para obtener respuesta inmediata, o volver a intentarlo.',
-      suggestedRefinements: buildRefinementsForQuery(currentQ),
+      suggestedRefinements: buildRefinementsForQuery(currentQ, {
+        title: activeTitle,
+        query: activeQ,
+      }),
     });
   }, []);
 
@@ -493,7 +536,11 @@ export default function App() {
   useEffect(() => {
     if (isLoading) return;
     const trimmed = query.trim();
-    if (!trimmed || isQueryTooBroadOrAmbiguous(trimmed)) return;
+    if (!trimmed || !shouldAutoPrewarmQuery(trimmed)) return;
+    // Do not fire background AI prewarm when the input simply displays a restored/completed study
+    if (stage === 'complete' && finalDerasha && trimmed === completedStudyQuery.trim()) {
+      return;
+    }
     const effectiveQuery = enrichQueryWithCalendar(trimmed, calendarData);
     if (
       prewarmedCache &&
@@ -508,7 +555,16 @@ export default function App() {
     }, 750);
 
     return () => clearTimeout(debounceTimer);
-  }, [query, isLoading, calendarData, prewarmedCache, getOrStartPrewarmPromise]);
+  }, [
+    query,
+    isLoading,
+    stage,
+    finalDerasha,
+    completedStudyQuery,
+    calendarData,
+    prewarmedCache,
+    getOrStartPrewarmPromise,
+  ]);
 
   // Stable UI & Modal Callbacks
   const handleOpenAboutModal = useCallback(() => setIsAboutModalOpen(true), []);
@@ -541,6 +597,96 @@ export default function App() {
     }
   }, []);
 
+  const handleReturnToHome = useCallback(() => {
+    activeRunIdRef.current += 1;
+    pipelineAbortRef.current?.abort();
+    pipelineAbortRef.current = null;
+    deliberationAbortRef.current?.abort();
+    deliberationAbortRef.current = null;
+    inFlightPrewarmPromiseRef.current = null;
+
+    setQuery('');
+    setCompletedStudyQuery('');
+    setClarificationState(null);
+    setErrorMessage(null);
+    setStage('idle');
+    setSefariaProgress({ current: 0, total: 0 });
+    setPhase1Data(null);
+    setVerifiedSources([]);
+    setFinalDerasha(null);
+    setFollowUps([]);
+    setDeliberationResult(null);
+    setIsDeliberatingMethodology(false);
+    setIsPrewarmingSources(false);
+    setIsMethodologyFanOpen(false);
+    setMethodologyDecisionSeconds(0);
+    setPrewarmedCache(null);
+
+    setActiveComparison(null);
+    setSelectedCompareNumbers([]);
+    cancelPendingDriveAction();
+
+    setIsAboutModalOpen(false);
+    setIsExportModalOpen(false);
+    setIsSettingsModalOpen(false);
+
+    setWorkspaceMode('estudio');
+    setRequestedHubTab(null);
+    setHomeResetSignal((n) => n + 1);
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const el = document.getElementById('query-input') as HTMLTextAreaElement | null;
+      if (el) {
+        el.focus();
+      }
+    }, 40);
+  }, [setActiveComparison, setSelectedCompareNumbers, cancelPendingDriveAction]);
+
+  useEffect(() => {
+    return () => {
+      if (clearArmTimerRef.current) {
+        clearTimeout(clearArmTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleClearOrDoubleTapHome = useCallback(() => {
+    const now = Date.now();
+    const isSecondTap = now - lastClearTapAtRef.current <= 2200;
+
+    if (clearArmTimerRef.current) {
+      clearTimeout(clearArmTimerRef.current);
+      clearArmTimerRef.current = null;
+    }
+
+    if (isSecondTap) {
+      lastClearTapAtRef.current = 0;
+      setIsHomeTapArmed(false);
+      handleReturnToHome();
+      return;
+    }
+
+    // 1st tap: Clear the query box and arm a 2nd-tap window to return to start
+    setQuery('');
+    if (latestStateRef.current.clarificationState) {
+      setClarificationState(null);
+    }
+    lastClearTapAtRef.current = now;
+    setIsHomeTapArmed(true);
+
+    const inputEl = document.getElementById('query-input') as HTMLTextAreaElement | null;
+    if (inputEl) {
+      inputEl.focus();
+    }
+
+    clearArmTimerRef.current = setTimeout(() => {
+      lastClearTapAtRef.current = 0;
+      setIsHomeTapArmed(false);
+      clearArmTimerRef.current = null;
+    }, 2200);
+  }, [handleReturnToHome]);
+
   const handleChangeQuery = useCallback((val: string) => {
     setQuery(val);
     if (latestStateRef.current.clarificationState) {
@@ -557,7 +703,7 @@ export default function App() {
   }, []);
 
   const handleNavigateSection = useCallback(
-    (target: 'study' | 'archive' | 'topics' | 'musar' | 'youtube') => {
+    (target: 'study' | 'archive' | 'topics' | 'musar') => {
       if (target === 'study') {
         setWorkspaceMode('estudio');
         setTimeout(() => {
@@ -587,12 +733,6 @@ export default function App() {
           const el = document.getElementById('suggested-topics-hub');
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 60);
-      } else if (target === 'youtube') {
-        setWorkspaceMode('youtube');
-        setTimeout(() => {
-          const el = document.getElementById('youtube-visual-studio');
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 60);
       }
     },
     []
@@ -612,36 +752,6 @@ export default function App() {
     setTimeout(() => {
       const el = document.getElementById('derashot-archive-section');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
-  }, []);
-
-  const handleQuickOpenYouTubeStudio = useCallback(() => {
-    setWorkspaceMode('youtube');
-    setTimeout(() => {
-      const el = document.getElementById('youtube-visual-studio');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
-  }, []);
-
-  const handleOpenYouTubeStudioFromInput = useCallback((youtubeUrl: string) => {
-    setYoutubeBridgeUrl(youtubeUrl);
-    setYoutubeAutoTriggerSignal((n) => n + 1);
-    setWorkspaceMode('youtube');
-    setTimeout(() => {
-      const el = document.getElementById('youtube-visual-studio');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
-  }, []);
-
-  const handleSendYouTubeTopicToDerasha = useCallback((topic: string) => {
-    setQuery(topic);
-    setWorkspaceMode('estudio');
-    setTimeout(() => {
-      const el = document.getElementById('query-input');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.focus();
-      }
     }, 60);
   }, []);
 
@@ -690,6 +800,7 @@ export default function App() {
       setVerifiedSources(entry.verifiedSources || []);
       setFinalDerasha(entry.finalDerasha);
       setFollowUps(entry.followUps || []);
+      skipNextAutoSaveRef.current = true;
       setStage('complete');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -702,6 +813,7 @@ export default function App() {
     setVerifiedSources([]);
     setFinalDerasha(syntheticDerasha);
     setFollowUps(entry.followUps || []);
+    skipNextAutoSaveRef.current = true;
     setStage('complete');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -740,15 +852,23 @@ export default function App() {
   }, [restoreSafePoint]);
 
   const handleCancelAndRequestClarification = useCallback(() => {
-    const currentQ = latestStateRef.current.query;
+    const st = latestStateRef.current;
+    const currentQ = st.query;
+    const activeTitle = st.finalDerasha?.derashaTitle || st.phase1Data?.title;
+    const activeQ = st.completedStudyQuery;
     activeRunIdRef.current += 1;
     setStage('idle');
     setClarificationState({
       mode: 'clarification_needed',
       originalQuery: currentQ,
+      activeStudyTitle: activeTitle,
+      activeStudyQuery: activeQ,
       reason:
         'Se ha detenido la espera prolongada. Para obtener una respuesta mucho más ágil y centrada en fuentes exactas de Sefaria y Jazal, te sugerimos precisar el ángulo de tu pregunta:',
-      suggestedRefinements: buildRefinementsForQuery(currentQ),
+      suggestedRefinements: buildRefinementsForQuery(currentQ, {
+        title: activeTitle,
+        query: activeQ,
+      }),
     });
   }, []);
 
@@ -761,20 +881,28 @@ export default function App() {
   const handleRequestClarificationFromInput = useCallback(() => {
     const st = latestStateRef.current;
     const trimmed = st.query.trim();
-    if (!trimmed) return;
-    const effectiveQuery = enrichQueryWithCalendar(trimmed, st.calendarData);
+    const activeTitle = st.finalDerasha?.derashaTitle || st.phase1Data?.title;
+    const activeQ = st.completedStudyQuery;
+    const baseInput = trimmed || activeQ || activeTitle || '';
+    if (!baseInput) return;
+    const effectiveQuery = enrichQueryWithCalendar(baseInput, st.calendarData);
     setClarificationState({
       mode: 'clarification_needed',
       originalQuery: effectiveQuery,
+      activeStudyTitle: activeTitle,
+      activeStudyQuery: activeQ,
       reason:
         'Selecciona el ángulo específico o la Puerta Lógica metodológica con la que deseas abordar tu estudio:',
-      suggestedRefinements: buildRefinementsForQuery(effectiveQuery),
+      suggestedRefinements: buildRefinementsForQuery(effectiveQuery, {
+        title: activeTitle,
+        query: activeQ,
+      }),
     });
   }, []);
 
   // Decoupled Methodology Deliberation + Background Pre-Warming of Phase 1 & Phase 2
   const handleDeliberateAndPrewarm = useCallback(async () => {
-    const { query: rawQ, calendarData: cal } = latestStateRef.current;
+    const { query: rawQ, calendarData: cal, tonoHomiletico: currentTone } = latestStateRef.current;
     const trimmed = rawQ.trim();
     if (!trimmed) return;
     const effectiveQuery = enrichQueryWithCalendar(trimmed, cal);
@@ -785,15 +913,25 @@ export default function App() {
     const abortController = new AbortController();
     deliberationAbortRef.current = abortController;
 
+    setErrorMessage(null);
     setIsDeliberatingMethodology(true);
 
-    const deliberationPromise = requestDecideMethodology(effectiveQuery, abortController.signal)
+    const deliberationPromise = requestDecideMethodology(
+      effectiveQuery,
+      abortController.signal,
+      currentTone
+    )
       .then((res) => {
         if (!abortController.signal.aborted) {
           setDeliberationResult({ ...res, query: trimmed });
         }
       })
-      .catch(() => {})
+      .catch((err: any) => {
+        if (err?.name === 'AbortError' || abortController.signal.aborted) return;
+        setErrorMessage(
+          err?.message || 'No se pudo completar la deliberación metodológica en este momento.'
+        );
+      })
       .finally(() => {
         if (deliberationAbortRef.current === abortController) {
           deliberationAbortRef.current = null;
@@ -801,7 +939,9 @@ export default function App() {
         setIsDeliberatingMethodology(false);
       });
 
-    const prewarmPromise = getOrStartPrewarmPromise(effectiveQuery);
+    const prewarmPromise = shouldAutoPrewarmQuery(trimmed)
+      ? getOrStartPrewarmPromise(effectiveQuery)
+      : Promise.resolve(null);
 
     await Promise.all([deliberationPromise, prewarmPromise]);
   }, [getOrStartPrewarmPromise]);
@@ -845,42 +985,125 @@ export default function App() {
       }
 
       if (!forceExecution && isQueryTooBroadOrAmbiguous(effectiveQuery)) {
+        const activeTitle = st.finalDerasha?.derashaTitle || st.phase1Data?.title;
+        const activeQ = st.completedStudyQuery;
         setErrorMessage(null);
         setClarificationState({
           mode: 'clarification_needed',
           originalQuery: effectiveQuery,
+          activeStudyTitle: activeTitle,
+          activeStudyQuery: activeQ,
           reason:
             'Tu consulta es muy breve o general. Para evitar una espera muy larga y poder consultar los textos exactos en el Tanaj, el Talmud y Sefaria, por favor aclara qué aspecto específico deseas estudiar:',
-          suggestedRefinements: buildRefinementsForQuery(effectiveQuery),
+          suggestedRefinements: buildRefinementsForQuery(effectiveQuery, {
+            title: activeTitle,
+            query: activeQ,
+          }),
         });
         return;
       }
 
       const currentRunId = activeRunIdRef.current + 1;
       activeRunIdRef.current = currentRunId;
+      pipelineAbortRef.current?.abort();
+      const pipelineController = new AbortController();
+      pipelineAbortRef.current = pipelineController;
 
       setClarificationState(null);
       setErrorMessage(null);
-      setFinalDerasha(null);
-      setFollowUps([]);
-      setCompletedStudyQuery(effectiveQuery);
-
-      const inFlightPrewarmForQuery =
-        inFlightPrewarmPromiseRef.current &&
-        inFlightPrewarmPromiseRef.current.query === effectiveQuery
-          ? inFlightPrewarmPromiseRef.current.promise
-          : null;
 
       try {
+        // Phase 0: Calibrated semantic methodology, tone, and specificity evaluation
+        let calibratedDecision =
+          st.deliberationResult &&
+          (st.deliberationResult.query.trim().toLowerCase() === activeQuery.trim().toLowerCase() ||
+            st.deliberationResult.query.trim().toLowerCase() === effectiveQuery.trim().toLowerCase())
+            ? st.deliberationResult
+            : null;
+
+        if (!calibratedDecision && (!forceExecution || requestedMethodology === 'AUTO')) {
+          setIsDeliberatingMethodology(true);
+          try {
+            const evaluated = await requestDecideMethodology(
+              effectiveQuery,
+              pipelineController.signal,
+              st.tonoHomiletico
+            );
+            if (activeRunIdRef.current !== currentRunId) return;
+            calibratedDecision = { ...evaluated, query: effectiveQuery };
+            setDeliberationResult(calibratedDecision);
+          } finally {
+            if (activeRunIdRef.current === currentRunId) {
+              setIsDeliberatingMethodology(false);
+            }
+          }
+        }
+
+        if (
+          !forceExecution &&
+          calibratedDecision?.decisionCalibration?.needsClarification
+        ) {
+          const activeTitle = st.finalDerasha?.derashaTitle || st.phase1Data?.title;
+          const activeQ = st.completedStudyQuery;
+          const specLabel = calibratedDecision.decisionCalibration.specificityLevelLabel;
+          const specPct = calibratedDecision.decisionCalibration.specificityNormalized;
+          setClarificationState({
+            mode: 'clarification_needed',
+            originalQuery: effectiveQuery,
+            activeStudyTitle: activeTitle,
+            activeStudyQuery: activeQ,
+            reason: `Tu consulta («${effectiveQuery}») fue evaluada como ${specLabel.toLowerCase()} (${specPct}% de especificidad). Acotar el ángulo permitirá recuperar pasajes exactos en Sefaria y ofrecerte una Drashá mucho más precisa y veloz:`,
+            suggestedRefinements: buildRefinementsForQuery(effectiveQuery, {
+              title: activeTitle,
+              query: activeQ,
+            }),
+          });
+          return;
+        }
+
+        const effectivePipelineMethodology: DerashaMethodology =
+          requestedMethodology === 'AUTO' && calibratedDecision?.recommendedPrimary
+            ? calibratedDecision.recommendedPrimary
+            : requestedMethodology;
+
+        const effectivePipelineComplementary: DerashaMethodology[] =
+          st.metodologiasComplementarias.length > 0
+            ? st.metodologiasComplementarias
+            : requestedMethodology === 'AUTO' && calibratedDecision
+            ? st.duracion === '30_MIN'
+              ? calibratedDecision.recommendedComplementaryFor30Min
+              : st.duracion === '10_MIN'
+              ? calibratedDecision.recommendedComplementaryFor10Min
+              : []
+            : st.metodologiasComplementarias;
+
+        const effectivePipelineTone: DerashaTone =
+          st.tonoHomiletico === 'AUTO' && calibratedDecision?.recommendedTone
+            ? calibratedDecision.recommendedTone
+            : st.tonoHomiletico;
+
+        setPhase1Data(null);
+        setVerifiedSources([]);
+        setFinalDerasha(null);
+        setFollowUps([]);
+        setCompletedStudyQuery(effectiveQuery);
+
+        const inFlightPrewarmForQuery =
+          inFlightPrewarmPromiseRef.current &&
+          inFlightPrewarmPromiseRef.current.query === effectiveQuery
+            ? inFlightPrewarmPromiseRef.current.promise
+            : null;
+
         const result = await executeFullDerashaPipeline({
           effectiveQuery,
-          requestedMethodology,
+          requestedMethodology: effectivePipelineMethodology,
           duracion: st.duracion,
-          metodologiasComplementarias: st.metodologiasComplementarias,
+          metodologiasComplementarias: effectivePipelineComplementary,
           audienciaOTono: st.audienciaOTono,
-          tonoHomiletico: st.tonoHomiletico,
+          tonoHomiletico: effectivePipelineTone,
           prewarmedCache: st.prewarmedCache,
           inFlightPrewarmPromise: inFlightPrewarmForQuery,
+          signal: pipelineController.signal,
           isRunStillActive: () => activeRunIdRef.current === currentRunId,
           onStageChange: (nextStage) => {
             if (activeRunIdRef.current === currentRunId) {
@@ -914,18 +1137,25 @@ export default function App() {
         setFinalDerasha(result.finalDerasha);
         setStage('complete');
       } catch (err: any) {
-        if (activeRunIdRef.current !== currentRunId) return;
+        if (err?.name === 'AbortError' || activeRunIdRef.current !== currentRunId) return;
         console.warn('[Darshán AI] Aviso en pipeline:', err);
 
         if (isPipelineTimeoutOrUnavailableError(err)) {
+          const activeTitle = st.finalDerasha?.derashaTitle || st.phase1Data?.title;
+          const activeQ = st.completedStudyQuery;
           setStage('idle');
           setClarificationState({
             mode: 'timeout_unavailable',
             originalQuery: effectiveQuery,
+            activeStudyTitle: activeTitle,
+            activeStudyQuery: activeQ,
             reason:
               err?.message ||
               'No hay respuestas disponibles de momento debido a una espera demasiado prolongada. Por favor aclara o acota tu consulta seleccionando una de las opciones siguientes, o vuelve a intentarlo:',
-            suggestedRefinements: buildRefinementsForQuery(effectiveQuery),
+            suggestedRefinements: buildRefinementsForQuery(effectiveQuery, {
+              title: activeTitle,
+              query: activeQ,
+            }),
           });
         } else {
           setStage('error');
@@ -945,9 +1175,33 @@ export default function App() {
 
   const handleSelectRefinement = useCallback(
     (refinedQuery: string) => {
-      setQuery(refinedQuery);
+      const st = latestStateRef.current;
+      const activeTitle =
+        st.clarificationState?.activeStudyTitle ||
+        st.finalDerasha?.derashaTitle ||
+        st.phase1Data?.title ||
+        '';
+      const activeQ = st.clarificationState?.activeStudyQuery || st.completedStudyQuery || '';
+      const trimmedRef = refinedQuery.trim();
+      const anchor = (activeTitle || activeQ).trim();
+
+      let finalQuery = trimmedRef;
+      if (anchor && trimmedRef.length < 95 && !/profundizando\s+y\s+acotando/i.test(trimmedRef)) {
+        const anchorWords = anchor
+          .toLowerCase()
+          .replace(/[¿?¡!«»"'.,;:()]/g, ' ')
+          .split(/\s+/)
+          .filter((w) => w.length >= 5);
+        const lowerRef = trimmedRef.toLowerCase();
+        const sharesTopic = anchorWords.some((w) => lowerRef.includes(w));
+        if (!sharesTopic) {
+          finalQuery = `${anchor} — Profundizando y acotando en: ${trimmedRef}`;
+        }
+      }
+
+      setQuery(finalQuery);
       setClarificationState(null);
-      handleGenerateDerasha(refinedQuery, true);
+      handleGenerateDerasha(finalQuery, true);
     },
     [handleGenerateDerasha]
   );
@@ -1125,16 +1379,24 @@ export default function App() {
         setFollowUps((prev) => [...prev, newItem]);
       } catch (err: any) {
         console.warn('Warning expanding derasha:', err);
-        const refinements = buildRefinementsForQuery(question);
-        const fallbackItem: FollowUpItem = {
-          id: 'fu-timeout-' + Date.now(),
+        const isTimeout = isPipelineTimeoutOrUnavailableError(err);
+        if (!isTimeout && err?.message) {
+          setErrorMessage(err.message);
+        }
+        const refinements = buildRefinementsForQuery(question, {
+          title: st.finalDerasha?.derashaTitle || st.phase1Data?.title,
+          query: activeStudyQuery,
+        });
+        const errorNoticeItem: FollowUpItem = {
+          id: 'fu-err-' + Date.now(),
           question,
-          answer:
-            '### Aviso sobre el tiempo de respuesta\n\nNo hay respuestas disponibles de momento para esta consulta porque el tiempo de espera fue demasiado largo o la pregunta abarca múltiples tratados. Te sugerimos **aclarar o acotar la pregunta** eligiendo uno de los siguientes ángulos específicos de la tradición judía:',
+          answer: isTimeout
+            ? '### Aviso sobre el tiempo de respuesta\n\nLa consulta superó el tiempo máximo de espera. Te sugerimos **aclarar o acotar la pregunta** eligiendo uno de los siguientes ángulos específicos:'
+            : `### No se pudo responder esta pregunta\n\n${err?.message || 'Ocurrió un error al consultar el modelo de IA.'}`,
           timestamp: new Date().toISOString(),
-          suggestedNextQuestions: refinements,
+          suggestedNextQuestions: isTimeout ? refinements : [],
         };
-        setFollowUps((prev) => [...prev, fallbackItem]);
+        setFollowUps((prev) => [...prev, errorNoticeItem]);
       } finally {
         setIsExpanding(false);
       }
@@ -1298,6 +1560,35 @@ export default function App() {
     []
   );
 
+  const handleSaveMishnatHaDorotQuotes = useCallback(
+    (quotes: MishnatHaDorotQuote[]) => {
+      const fetchedAt = new Date().toISOString();
+      setFinalDerasha((prev) => {
+        if (!prev || !prev.halakhicConsultation) return prev;
+        return {
+          ...prev,
+          halakhicConsultation: {
+            ...prev.halakhicConsultation,
+            mishnatHaDorotQuotes: quotes,
+            mishnatHaDorotFetchedAt: fetchedAt,
+          },
+        };
+      });
+      setPhase1Data((prev) => {
+        if (!prev || !prev.halakhicConsultation) return prev;
+        return {
+          ...prev,
+          halakhicConsultation: {
+            ...prev.halakhicConsultation,
+            mishnatHaDorotQuotes: quotes,
+            mishnatHaDorotFetchedAt: fetchedAt,
+          },
+        };
+      });
+    },
+    []
+  );
+
   return (
     <div className="min-h-screen flex flex-col text-slate-100 selection:bg-sky-500/30 selection:text-sky-100">
       {/* Top Header (3-Zone Contract + History Button + Gear Settings + Discreet Google Profile & Drive Icon) */}
@@ -1320,6 +1611,9 @@ export default function App() {
         onSignInGoogle={signInGoogle}
         onSignOutGoogle={signOutGoogle}
         onSyncDriveNow={syncWithGoogleDriveNow}
+        homeResetSignal={homeResetSignal}
+        isHomeTapArmed={isHomeTapArmed}
+        onClearOrReturnHome={handleClearOrDoubleTapHome}
       />
 
       {/* Main Content Container */}
@@ -1372,7 +1666,10 @@ export default function App() {
           onOpenFullArchive={handleQuickOpenArchive}
           onRequestClarification={handleRequestClarificationFromInput}
           onRunCrossComparison={handleRunCrossComparisonFromInput}
-          onOpenYouTubeStudio={handleOpenYouTubeStudioFromInput}
+          onReturnHome={handleReturnToHome}
+          homeResetSignal={homeResetSignal}
+          isHomeTapArmed={isHomeTapArmed}
+          onClearOrReturnHome={handleClearOrDoubleTapHome}
         />
 
         {/* AVISO DE ACLARACIÓN DE CONSULTA O ESPERA MUY LARGA */}
@@ -1434,92 +1731,109 @@ export default function App() {
 
         {/* SALIDA PRINCIPAL DE LA DRASHÁ ACTIVA */}
         {stage !== 'idle' && finalDerasha && (
-          <ActiveDerashaWorkspaceView
-            query={effectiveStudyQueryForActiveDerasha}
-            phase1Data={phase1Data}
-            verifiedSources={verifiedSources}
-            finalDerasha={finalDerasha}
-            followUps={followUps}
-            isExpanding={isExpanding}
-            isRegeneratingDuration={isRegeneratingDuration}
-            translatingRef={translatingRef}
-            isTranslatingAll={isTranslatingAll}
-            isLoadingMasters={isLoadingMasters}
-            readingScale={readingScale}
-            scaleClass={scaleClass}
-            typographyClass={typographyClass}
-            onCycleReadingScale={cycleReadingScale}
-            onToggleAtrilConfig={handleToggleAtrilConfig}
-            onOpenExportWithScope={handleOpenExportWithScope}
-            onAskFollowUp={handleAskFollowUp}
-            onRefineFullStudy={handleRefineFullStudy}
-            onChangeDurationOrComplementary={handleChangeDurationOrComplementary}
-            onTranslateSource={handleTranslateSource}
-            onTranslateAllSources={handleTranslateAllSources}
-            onRequestMasterReadings={handleRequestMasterReadings}
-          />
+          <Suspense
+            fallback={
+              <div className="p-8 rounded-3xl border border-slate-800 bg-slate-900/50 text-center text-sm text-slate-400">
+                Cargando vista editorial de la Drashá...
+              </div>
+            }
+          >
+            <ActiveDerashaWorkspaceView
+              query={effectiveStudyQueryForActiveDerasha}
+              phase1Data={phase1Data}
+              verifiedSources={verifiedSources}
+              finalDerasha={finalDerasha}
+              followUps={followUps}
+              isExpanding={isExpanding}
+              isRegeneratingDuration={isRegeneratingDuration}
+              translatingRef={translatingRef}
+              isTranslatingAll={isTranslatingAll}
+              isLoadingMasters={isLoadingMasters}
+              readingScale={readingScale}
+              scaleClass={scaleClass}
+              typographyClass={typographyClass}
+              onCycleReadingScale={cycleReadingScale}
+              onToggleAtrilConfig={handleToggleAtrilConfig}
+              onOpenExportWithScope={handleOpenExportWithScope}
+              onAskFollowUp={handleAskFollowUp}
+              onRefineFullStudy={handleRefineFullStudy}
+              onChangeDurationOrComplementary={handleChangeDurationOrComplementary}
+              onTranslateSource={handleTranslateSource}
+              onTranslateAllSources={handleTranslateAllSources}
+              onRequestMasterReadings={handleRequestMasterReadings}
+              onSaveMishnatHaDorotQuotes={handleSaveMishnatHaDorotQuotes}
+            />
+          </Suspense>
         )}
 
-        {/* 2. DEMÁS MODALIDADES DE SUGERENCIAS DE ESTUDIO Y COMPARADOR MÁS ABAJO */}
-        <section id="lower-study-modalities" className="pt-2 space-y-5 border-t border-slate-800/80">
-          <WorkspaceNavigationBar
-            workspaceMode={workspaceMode}
-            activeHubTab={requestedHubTab?.tab || 'parasha'}
-            onSelectStudyModality={handleQuickOpenTab}
-            onOpenArchiveModality={handleQuickOpenArchive}
-            onOpenYouTubeStudio={handleQuickOpenYouTubeStudio}
-            parashaNameEs={calendarData?.parasha?.nameEs}
-            nextEventNameEs={calendarData?.upcomingEvents?.[0]?.titleEs}
-            archiveCount={derashotArchive.length}
-          />
-
-          {/* ESTUDIO VISUAL DE VIDEOS DE YOUTUBE: ILUSTRACIONES SVG Y ANIMACIONES */}
-          {(workspaceMode === 'youtube' || workspaceMode === 'todo') && (
-            <YouTubeVisualStudio
-              initialYoutubeUrl={youtubeBridgeUrl}
-              autoTriggerSignal={youtubeAutoTriggerSignal}
-              onSendTopicToDerasha={handleSendYouTubeTopicToDerasha}
+        {/* 2. DEMÁS MODALIDADES: ocultas mientras corre o se aclara una consulta para evitar saturación de menús abajo */}
+        {!isLoading && !clarificationState && (
+          <section id="lower-study-modalities" className="pt-2 space-y-5 border-t border-slate-800/80">
+            <WorkspaceNavigationBar
+              workspaceMode={workspaceMode}
+              activeHubTab={requestedHubTab?.tab || 'parasha'}
+              onSelectStudyModality={handleQuickOpenTab}
+              onOpenArchiveModality={handleQuickOpenArchive}
+              parashaNameEs={calendarData?.parasha?.nameEs}
+              nextEventNameEs={calendarData?.upcomingEvents?.[0]?.titleEs}
+              archiveCount={derashotArchive.length}
             />
-          )}
 
-          {/* SUGERENCIAS DE ESTUDIO: PARASHÁ DE LA SEMANA, FESTIVIDADES JUDÍAS, MUSAR DIARIO Y PREGUNTAS CLÁSICAS */}
-          {workspaceMode !== 'archivo' && workspaceMode !== 'youtube' && (
-            <SuggestedTopicsHub
-              calendar={calendarData}
-              isLoadingCalendar={isLoadingCalendar}
-              onChangeCalendarParams={loadCalendar}
-              onSelectTopic={handleSelectTopicFromHub}
-              onSelectSample={handleSelectSampleFromHub}
-              requestedTab={requestedHubTab}
-            />
-          )}
+            {/* SUGERENCIAS DE ESTUDIO: Solo desplegado cuando el usuario abre Calendario/Parashá/Musar o Todo */}
+            {(workspaceMode === 'calendario' || workspaceMode === 'todo') && (
+              <Suspense
+                fallback={
+                  <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/40 text-center text-xs text-slate-400">
+                    Cargando calendario y sugerencias de estudio...
+                  </div>
+                }
+              >
+                <SuggestedTopicsHub
+                  calendar={calendarData}
+                  isLoadingCalendar={isLoadingCalendar}
+                  onChangeCalendarParams={loadCalendar}
+                  onSelectTopic={handleSelectTopicFromHub}
+                  onSelectSample={handleSelectSampleFromHub}
+                  requestedTab={requestedHubTab}
+                />
+              </Suspense>
+            )}
 
-          {/* ARCHIVO PERSISTENTE Y COMPARADOR DIALÉCTICO ENTRE DERASHOT NUMERADAS (#1–#9+) */}
-          {(workspaceMode === 'archivo' || workspaceMode === 'todo') && (
-            <DerashotArchiveHub
-              archive={derashotArchive}
-              comparativeStudies={comparativeStudies}
-              currentUser={firebaseUser}
-              driveConnected={Boolean(driveAccessToken)}
-              isSigningIn={isSigningInFirebase}
-              isSyncingDrive={isSyncingDrive}
-              driveSyncSummary={driveSyncSummary}
-              isComparing={isComparingDerashot}
-              activeComparison={activeComparison}
-              selectedNumbers={selectedCompareNumbers}
-              onToggleSelectNumber={toggleSelectCompareNumber}
-              onSetSelectedNumbers={setSelectedCompareNumbers}
-              onRunComparison={handleRunDerashaComparison}
-              onOpenArchivedDerasha={handleOpenArchivedDerasha}
-              onDeleteArchivedDerasha={deleteArchivedDerasha}
-              onUpdateEntryInDrive={requestUpdateDerashaInDrive}
-              onSignInGoogle={signInGoogle}
-              onSignOutGoogle={signOutGoogle}
-              onSyncDriveNow={syncWithGoogleDriveNow}
-              onSelectSavedComparison={handleSelectSavedComparison}
-            />
-          )}
-        </section>
+            {/* ARCHIVO PERSISTENTE Y COMPARADOR DIALÉCTICO ENTRE DERASHOT NUMERADAS (#1–#9+) */}
+            {(workspaceMode === 'archivo' || workspaceMode === 'todo') && (
+              <Suspense
+                fallback={
+                  <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/40 text-center text-xs text-slate-400">
+                    Cargando archivo de Derashot y comparador...
+                  </div>
+                }
+              >
+                <DerashotArchiveHub
+                  archive={derashotArchive}
+                  comparativeStudies={comparativeStudies}
+                  currentUser={firebaseUser}
+                  driveConnected={Boolean(driveAccessToken)}
+                  isSigningIn={isSigningInFirebase}
+                  isSyncingDrive={isSyncingDrive}
+                  driveSyncSummary={driveSyncSummary}
+                  isComparing={isComparingDerashot}
+                  activeComparison={activeComparison}
+                  selectedNumbers={selectedCompareNumbers}
+                  onToggleSelectNumber={toggleSelectCompareNumber}
+                  onSetSelectedNumbers={setSelectedCompareNumbers}
+                  onRunComparison={handleRunDerashaComparison}
+                  onOpenArchivedDerasha={handleOpenArchivedDerasha}
+                  onDeleteArchivedDerasha={deleteArchivedDerasha}
+                  onUpdateEntryInDrive={requestUpdateDerashaInDrive}
+                  onSignInGoogle={signInGoogle}
+                  onSignOutGoogle={signOutGoogle}
+                  onSyncDriveNow={syncWithGoogleDriveNow}
+                  onSelectSavedComparison={handleSelectSavedComparison}
+                />
+              </Suspense>
+            )}
+          </section>
+        )}
       </main>
 
       {/* Footer */}
@@ -1538,46 +1852,54 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Modals */}
-      <AboutModal
-        isOpen={isAboutModalOpen}
-        onClose={handleCloseAboutModal}
-      />
+      {/* Modals (lazy-loaded on open) */}
+      <Suspense fallback={null}>
+        {isAboutModalOpen && (
+          <AboutModal
+            isOpen={isAboutModalOpen}
+            onClose={handleCloseAboutModal}
+          />
+        )}
 
-      <ExportModal
-        isOpen={isExportModalOpen}
-        onClose={handleCloseExportModal}
-        query={effectiveStudyQueryForActiveDerasha}
-        phase1={phase1Data}
-        sources={verifiedSources}
-        derasha={finalDerasha}
-        followUps={followUps}
-        initialScope={exportScope}
-      />
+        {isExportModalOpen && (
+          <ExportModal
+            isOpen={isExportModalOpen}
+            onClose={handleCloseExportModal}
+            query={effectiveStudyQueryForActiveDerasha}
+            phase1={phase1Data}
+            sources={verifiedSources}
+            derasha={finalDerasha}
+            followUps={followUps}
+            initialScope={exportScope}
+          />
+        )}
 
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={handleCloseSettingsModal}
-        initialTab={settingsInitialTab}
-        readingScale={readingScale}
-        atrilTypography={atrilTypography}
-        onSelectScale={handleSelectReadingScale}
-        onSelectTypography={handleSelectAtrilTypography}
-        isRtl={isRtl}
-        onToggleRtl={handleToggleRtl}
-        workspaceMode={workspaceMode}
-        onChangeWorkspaceMode={handleChangeWorkspaceMode}
-        safePoints={safePoints}
-        onCreateManualSafePoint={handleCreateManualSafePoint}
-        onRestoreSafePoint={restoreSafePoint}
-        onDeleteSafePoint={deleteSafePoint}
-        onImportSafePointJson={importSafePointJson}
-        onRunVerifyAndRepair={runVerifyAndRepair}
-        archiveCount={derashotArchive.length}
-        comparativeCount={comparativeStudies.length}
-        activeStudyTitle={activeStudyTitle}
-        onOpenAboutModal={handleOpenAboutModal}
-      />
+        {isSettingsModalOpen && (
+          <SettingsModal
+            isOpen={isSettingsModalOpen}
+            onClose={handleCloseSettingsModal}
+            initialTab={settingsInitialTab}
+            readingScale={readingScale}
+            atrilTypography={atrilTypography}
+            onSelectScale={handleSelectReadingScale}
+            onSelectTypography={handleSelectAtrilTypography}
+            isRtl={isRtl}
+            onToggleRtl={handleToggleRtl}
+            workspaceMode={workspaceMode}
+            onChangeWorkspaceMode={handleChangeWorkspaceMode}
+            safePoints={safePoints}
+            onCreateManualSafePoint={handleCreateManualSafePoint}
+            onRestoreSafePoint={restoreSafePoint}
+            onDeleteSafePoint={deleteSafePoint}
+            onImportSafePointJson={importSafePointJson}
+            onRunVerifyAndRepair={runVerifyAndRepair}
+            archiveCount={derashotArchive.length}
+            comparativeCount={comparativeStudies.length}
+            activeStudyTitle={activeStudyTitle}
+            onOpenAboutModal={handleOpenAboutModal}
+          />
+        )}
+      </Suspense>
 
       {/* Mandatory User Confirmation Dialog for Google Drive Destructive / Overwrite Operations */}
       {pendingDriveConfirmation && (

@@ -161,20 +161,24 @@ export function useArchiveAndComparator() {
 
   // Merge server-side archive safely on mount (when not in Drive-only mode)
   useEffect(() => {
+    if (driveAccessToken) return;
+    let cancelled = false;
     fetch(resolveApiUrl('/api/derashot-archive'))
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
+        if (cancelled) return;
         if (data && Array.isArray(data.entries) && data.entries.length > 0) {
           setDerashotArchive((prev) => {
             const merged = mergeArchiveEntriesSafely(prev, data.entries);
-            if (!driveAccessToken) {
-              saveLocalArchive(merged);
-            }
+            saveLocalArchive(merged);
             return merged;
           });
         }
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [driveAccessToken]);
 
   const syncWithGoogleDriveNow = useCallback(async () => {

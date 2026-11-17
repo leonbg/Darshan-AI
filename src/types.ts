@@ -130,6 +130,7 @@ export type HalakhicConsultationFocus =
   | 'REZOS'
   | 'FESTIVIDADES'
   | 'KASHRUT'
+  | 'CICLO_DE_VIDA'
   | 'HALAJA_GENERAL';
 
 export interface ShulchanArukhDirectQuote {
@@ -147,6 +148,31 @@ export interface ShulchanArukhDirectQuote {
   verifiedFromSefaria?: boolean;
 }
 
+export type HalakhicGenerationEra =
+  | 'CHAZAL'
+  | 'RISHONIM'
+  | 'EARLY_ACHARONIM'
+  | 'CLASSIC_ACHARONIM'
+  | 'CONTEMPORARY_POSKIM';
+
+export interface MishnatHaDorotQuote {
+  id: string;
+  sourceShulchanArukhRef: string;
+  sourceSimanSeifLabel: string;
+  generationEra: HalakhicGenerationEra;
+  generationLabel: string;
+  periodLabel: string;
+  authorityName: string;
+  ref: string;
+  heRef: string;
+  hebrewText: string;
+  englishText?: string;
+  spanishTranslation: string;
+  rulingEvolutionNote?: string;
+  sefariaUrl: string;
+  verifiedFromSefaria: boolean;
+}
+
 export interface HalakhicShulchanArukhConsultation {
   active: boolean;
   consultedBranches: HalakhicConsultationFocus[];
@@ -157,6 +183,8 @@ export interface HalakhicShulchanArukhConsultation {
   externalPhilosophyOmitted: boolean;
   moduleSummary: string;
   systemPromptDirective: string;
+  mishnatHaDorotQuotes?: MishnatHaDorotQuote[];
+  mishnatHaDorotFetchedAt?: string;
 }
 
 export interface Phase1AnalysisResult {
@@ -226,9 +254,24 @@ export type DerashaTone =
 
 export type ResolvedDerashaTone = Exclude<DerashaTone, 'AUTO'>;
 
+export interface CalibratedQueryDecisionMetrics {
+  primaryConfidence: number; // 0 to 1
+  toneConfidence: number; // 0 to 1
+  halakhicProbability: number; // 0.01 to 0.99
+  isPurelyHalakhic: boolean;
+  externalContrastProbability: number; // 0.01 to 0.99
+  requiresExternalContrast: boolean;
+  specificityScore: number; // 0 to 3 weighted rubric score
+  specificityNormalized: number; // 0 to 100
+  specificityLevelLabel: string;
+  specificityConfidence: number; // 0 to 1
+  needsClarification: boolean;
+}
+
 export interface MethodologyCandidateAnalysis {
   methodology: Exclude<DerashaMethodology, 'AUTO'>;
-  relevanceScore: number; // 0 to 100
+  relevanceScore: number; // 0 to 100 calibrated probability percentage
+  calibratedProbability?: number; // 0 to 1 exact calibrated probability
   role: 'primary' | 'complementary' | 'optional';
   whyApplicable: string;
   expectedContribution: string;
@@ -244,6 +287,7 @@ export interface MethodologyDeliberationResult {
   toneRationale?: string;
   deliberationSummary: string;
   candidates: MethodologyCandidateAnalysis[];
+  decisionCalibration?: CalibratedQueryDecisionMetrics;
   deliberationTimeMs?: number;
 }
 
@@ -540,98 +584,4 @@ export interface SystemSafePointSnapshot {
   };
 }
 
-export type YouTubeVisualStyle =
-  | 'editorial_iluminado'
-  | 'diagrama_filosofico'
-  | 'acuarela_pergamino'
-  | 'geometria_cabalistica';
-
-export type YouTubeOutputMode = 'both' | 'illustrations' | 'animation';
-
-export type YouTubeAspectRatio = '16:9' | '9:16';
-
-export type YouTubeImageQualityTier = 'flash_lite' | 'nano_banana_2_1';
-
-export type YouTubeMotionPattern =
-  | 'radiant_rays'
-  | 'orbiting_spheres'
-  | 'scroll_unfold'
-  | 'ascending_sparks'
-  | 'dialectic_bridge';
-
-export interface YouTubeVisualIllustration {
-  id: string;
-  sceneNumber: number;
-  timestamp: string;
-  title: string;
-  visualConcept: string;
-  symbolicMeaning: string;
-  hebrewCaption: string;
-  palette: [string, string, string];
-  svgMarkup: string;
-  imagePrompt?: string;
-  imageDataUrl?: string;
-  imageModelUsed?: string;
-}
-
-export interface YouTubeAnimationScene {
-  id: string;
-  sceneNumber: number;
-  timestampRange: string;
-  durationSec: number;
-  headline: string;
-  narrationCaption: string;
-  hebrewMotif: string;
-  motionPattern: YouTubeMotionPattern;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
-  keyElements: Array<{
-    label: string;
-    role: string;
-  }>;
-}
-
-export interface YouTubeGeneratedVideoClip {
-  videoDataUrl: string;
-  mimeType: string;
-  duration: '6s' | '10s';
-  resolution: '720p' | '1080p';
-  aspectRatio: YouTubeAspectRatio;
-  modelUsed: string;
-  promptUsed: string;
-}
-
-export interface YouTubeVisualAnalysisResult {
-  videoId: string;
-  canonicalUrl: string;
-  videoTitle: string;
-  channelName: string;
-  thumbnailUrl: string;
-  visualStyle: YouTubeVisualStyle;
-  aspectRatio: YouTubeAspectRatio;
-  outputMode: YouTubeOutputMode;
-  imageQuality?: YouTubeImageQualityTier;
-  coreThesis: string;
-  suggestedDerashaTopic: string;
-  keyHebrewTerms: Array<{
-    term: string;
-    transliteration: string;
-    meaning: string;
-  }>;
-  illustrations: YouTubeVisualIllustration[];
-  animationStoryboard: {
-    title: string;
-    overallTheme: string;
-    videoPrompt?: string;
-    scenes: YouTubeAnimationScene[];
-  };
-  pedagogicalComparison?: {
-    recommendedFormat: 'animacion_escenica' | 'video_continuo' | 'hibrido';
-    clarityVerdict: string;
-    videoStrengths: string;
-    animationStrengths: string;
-  };
-  analyzedWithVideoStream: boolean;
-}
 

@@ -61,10 +61,35 @@ export function enrichQueryWithCalendar(
  * Rule 1: Detects overly brief or ambiguous queries before starting a long pipeline wait.
  */
 export function isQueryTooBroadOrAmbiguous(rawQuery: string): boolean {
+  const meaningfulChars = rawQuery
+    .trim()
+    .replace(/[^a-zA-Z0-9\u0590-\u05FFáéíóúüñÁÉÍÓÚÜÑ]/g, '');
+  return meaningfulChars.length < 2;
+}
+
+/**
+ * Checks whether a query contains an explicit canonical book/tractate + chapter/verse/folio citation.
+ */
+export function hasCanonicalCitationReference(rawQuery: string): boolean {
+  const q = rawQuery.trim();
+  if (!q) return false;
+  if (/\[Calendario Hebreo/i.test(q)) return true;
+  return /\b(?:g[eé]nesis|bereshit|[eé]xodo|shemot|lev[ií]tico|vayikr[aá]|n[uú]meros|bamidbar|deuteronomio|devarim|salmos?|tehil[ií]m|proverbios|mishl[eé]|isa[ií]as|jerem[ií]as|ezequiel|daniel|ester|rut|eclesiast[eé]s|koh[eé]let|cantar|avot|berajot|berakhot|shabat|shabbat|pesajim|pesachim|yom[aá]|suk[aá]|taanit|meguil[aá]|megillah|jagig[aá]|kidush[ií]n|kiddushin|bava|sanhedr[ií]n|makot|avod[aá]|menajot|jul[ií]n|arjin|arakhin|sot[aá]h?|oraj\s+jaim|orach\s+chayim|yor[eé]\s+de[aá]|mesil+at\s+yesharim)\s+\d+/i.test(
+    q
+  );
+}
+
+/**
+ * Determines whether a typed query is focused enough to prewarm Phase 1 & 2 in the background
+ * without wasting quota on 1–2 word broad terms that will ask for clarification first.
+ */
+export function shouldAutoPrewarmQuery(rawQuery: string): boolean {
   const trimmed = rawQuery.trim();
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  const hasSpecificRef = /\d+:\d+/.test(trimmed);
-  const isHebrewPhrase = /[\u0590-\u05FF]/.test(trimmed) && words.length >= 2;
-  if (hasSpecificRef || isHebrewPhrase) return false;
-  return words.length < 3 || trimmed.length < 14;
+  if (isQueryTooBroadOrAmbiguous(trimmed)) return false;
+  if (hasCanonicalCitationReference(trimmed)) return true;
+  const words = trimmed
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-zA-Z0-9\u0590-\u05FFáéíóúüñÁÉÍÓÚÜÑ]/g, ''))
+    .filter((w) => w.length >= 2);
+  return words.length >= 3;
 }

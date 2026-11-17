@@ -121,6 +121,30 @@ export const ExegesisFollowUp: React.FC<ExegesisFollowUpProps> = React.memo(({
       lowerQ.includes('esaú') ||
       lowerQ.includes('yaakov') ||
       lowerQ.includes('toldot');
+    const isGratitude =
+      lowerQ.includes('gratitud') ||
+      lowerQ.includes('hakarat') ||
+      lowerQ.includes('mode ani') ||
+      lowerQ.includes('modé aní') ||
+      lowerQ.includes('agradec') ||
+      lowerQ.includes('hodaia') ||
+      lowerQ.includes('hodaiá') ||
+      lowerQ.includes('letoda');
+    const isMourningTopic =
+      lowerQ.includes('avelut') ||
+      lowerQ.includes('duelo') ||
+      lowerQ.includes('luto') ||
+      lowerQ.includes('kadish') ||
+      lowerQ.includes('shiva') ||
+      lowerQ.includes('shivá') ||
+      lowerQ.includes('shloshim');
+    const isPosture =
+      !isMourningTopic &&
+      (lowerQ.includes('postura') ||
+        lowerQ.includes('reverencia') ||
+        lowerQ.includes('inclinarse') ||
+        lowerQ.includes('keria') ||
+        lowerQ.includes('keriá'));
 
     return isAfterlife
       ? [
@@ -153,9 +177,21 @@ export const ExegesisFollowUp: React.FC<ExegesisFollowUpProps> = React.memo(({
           '¿Cómo explican Rashi y Bereshit Rabá 65:10 la ceguera de Yitzjak y la profecía de Rivká?',
           '¿Qué enseña el Rabino Jonathan Sacks sobre por qué Yitzjak amaba a Esav y el significado de las dos bendiciones?',
         ]
+      : isGratitude
+      ? [
+          '¿Por qué recitamos Modé Aní antes de lavarnos las manos (Netilat Yadaim) y en qué se diferencia de Elohai Neshamá (Berajot 60b)?',
+          '¿Cómo enseña Rashi (Éxodo 7:19; 8:12) el principio de Hakarat HaTov sobre Moshé y Aarón ante el Nilo y el polvo?',
+          '¿Qué significa en Berajot 35a que quien disfruta de este mundo sin recitar bendición «comete robo» y cómo lo analiza Jovot HaLevavot en Shaar HaBejiná?',
+        ]
+      : isPosture
+      ? [
+          '¿Qué diferencia halájica y espiritual hay entre Keriá, Kidá e Hishtajavaiá en Berajot 34b y Megilá 22b?',
+          '¿Por qué el Shulján Aruj (Oraj Jaim 113:4) ordena doblar en «Baruj–Atá» y levantarse exactamente al pronunciar «Hashem»?',
+          '¿Qué simbolizan las 18 vértebras y el hueso Luz en Berajot 28b y Vayikrá Rabá 18:1?',
+        ]
       : [
           '¿Cómo comentan este tema Rashi, Maimónides (Rambam) y Najmánides (Ramban)?',
-          '¿Cómo podemos hacer un contraste entre las fuentes internas de la Torá y la perspectiva filosófica externa sobre este punto?',
+          '¿Cuál es la fuente talmúdica directa y la aplicación halájica en el Shulján Aruj sobre este punto?',
           '¿Cuál es la aplicación práctica de Musar (Mesilat Yesharim) y de la Jasidut para llevar esta enseñanza a la vida diaria?',
         ];
   }, [query, derashaTitle]);
@@ -178,9 +214,14 @@ export const ExegesisFollowUp: React.FC<ExegesisFollowUpProps> = React.memo(({
   const handleRefineStudyClick = useCallback(() => {
     if (!questionInput.trim() || !onRefineFullStudy) return;
     const q = questionInput.trim();
+    const baseStudy = (derashaTitle || query || '').trim();
     setQuestionInput('');
-    onRefineFullStudy(`${query.trim()} — Profundizando y acotando en: ${q}`);
-  }, [questionInput, onRefineFullStudy, query]);
+    onRefineFullStudy(
+      baseStudy
+        ? `${baseStudy} — Profundizando y acotando en: ${q}`
+        : q
+    );
+  }, [questionInput, onRefineFullStudy, query, derashaTitle]);
 
   const handleCopy = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -297,7 +338,7 @@ export const ExegesisFollowUp: React.FC<ExegesisFollowUpProps> = React.memo(({
               }
             }}
             disabled={isLoading}
-            placeholder="Ejemplo: Profundicemos en cuáles son los requisitos para el Olam HaBá frente al Nirvana o Valhalla, o qué dice el Rambam sobre este punto..."
+            placeholder={`Ejemplo sobre «${derashaTitle || query || 'este estudio'}»: Profundicemos en las fuentes del Talmud, el Shulján Aruj, el Musar o la Cábala sobre este punto...`}
             className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-900 border border-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 text-slate-100 placeholder-slate-500 text-sm outline-none transition resize-y"
           />
           <button

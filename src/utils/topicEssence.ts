@@ -51,12 +51,190 @@ function stripWrappedQuotes(text: string): string {
   return s;
 }
 
+function cleanDisjunctiveOrRedundantClauses(text: string): string {
+  let s = (text || '').trim();
+  if (!s) return s;
+
+  // Detect dedicated prayer posture / bowing / reverence queries early
+  const hasMourningTerms =
+    /\b(avelut|duelo|luto|aninut|shiv[aá]|shloshim|yahrzeit|kadish|kaddish|vestidura|rasgar|entierro|difunto)\b/i.test(
+      s
+    );
+  if (
+    !hasMourningTerms &&
+    /(?<![a-záéíóúñ])(postura|reverencia|inclin(?:arse|amos|an|aci[oó]n|aciones)|keri[aá]|hishtajavai[aá]|postrarse|postraci[oó]n|arrodillarse)(?![a-záéíóúñ])/i.test(
+      s
+    ) &&
+    !/(?<![a-záéíóúñ])modim\s+de[- ]?raban[aá]n(?![a-záéíóúñ])/i.test(s)
+  ) {
+    return 'La Postura Corporal, la Inclinación (Keriá) y la Reverencia en la Plegaria';
+  }
+
+  // Detect dedicated gratitude / Hakarat HaTov / Modé Aní queries early
+  if (
+    /\b(gratitud|hakarat\s+hatov|mod[eé]\s+an[ií]|agradecimiento|agradecer|hodai[aá]|mizmor\s+letod[aá]|tod[aá]\s+rab[aá])\b/i.test(
+      s
+    ) &&
+    !/\b(halel|rosh\s+j[oó]desh|postura|reverencia|inclinarse)\b/i.test(s)
+  ) {
+    return /\b(mod[eé]\s+an[ií]|despertar|devoluci[oó]n\s+del\s+alma|elohai\s+nesham[aá])\b/i.test(s)
+      ? 'La Gratitud al Despertar (Modé Aní) y Hakarat HaTov en la Torá'
+      : 'La Gratitud (Hakarat HaTov), Hodaiá y Todá en la Tradición Judía';
+  }
+
+  // Condense repeated "X o significado de Y o por qué Z" style dictations/questions
+  if (/\s+o\s+/i.test(s)) {
+    const parts = s
+      .split(/\s+o\s+/i)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) {
+      const cleanedParts: string[] = [];
+      const seenNorm = new Set<string>();
+      for (const part of parts) {
+        let p = part
+          .replace(/^(?:el\s+|la\s+)?(?:significado|sentido|valor|raz[oó]n)\s+(?:de|del|de\s+la|sobre)\s+/i, '')
+          .replace(/^(?:por\s+qu[eé]\s+(?:debemos|se\s+debe|hay\s+que)?\s*)/i, '')
+          .replace(/^(?:qu[eé]\s+(?:es|significa)\s+)/i, '')
+          .trim();
+        if (!p) continue;
+        const normP = normalizeCompare(p);
+        if (normP && !seenNorm.has(normP)) {
+          seenNorm.add(normP);
+          cleanedParts.push(lowercaseFirst(p));
+        }
+      }
+      if (cleanedParts.length >= 2) {
+        const joined =
+          cleanedParts.length === 2
+            ? `${cleanedParts[0]} y ${cleanedParts[1]}`
+            : `${cleanedParts.slice(0, -1).join(', ')} y ${cleanedParts[cleanedParts.length - 1]}`;
+        return joined;
+      }
+      if (cleanedParts.length === 1) {
+        return cleanedParts[0];
+      }
+    }
+  }
+
+  return s;
+}
+
+export interface EssenceVariations {
+  primary: string;
+  shortLabel: string;
+  anaphoraOne: string;
+  anaphoraTwo: string;
+  anaphoraThree: string;
+  actionNoun: string;
+}
+
+/**
+ * Generates varied grammatical references for a topic so essays never echo
+ * the exact same long title phrase 20+ times in a row.
+ */
+export function buildEssenceVariations(
+  essence: string,
+  options?: { isPostureTopic?: boolean; isGratitudeTopic?: boolean; isHalakhic?: boolean }
+): EssenceVariations {
+  if (options?.isPostureTopic) {
+    return {
+      primary: essence,
+      shortLabel: 'la postura y la inclinación (Keriá)',
+      anaphoraOne: 'esta gestualidad litúrgica',
+      anaphoraTwo: 'la reverencia corporal en la Tefilá',
+      anaphoraThree: 'el diálogo entre cuerpo y espíritu ante Hashem',
+      actionNoun: 'la inclinación consciente (Keriá)',
+    };
+  }
+
+  if (options?.isGratitudeTopic) {
+    return {
+      primary: essence,
+      shortLabel: 'la gratitud (Hakarat HaTov) y Modé Aní',
+      anaphoraOne: 'el reconocimiento agradecido (Hakarat HaTov)',
+      anaphoraTwo: 'la conciencia cotidiana de Modé Aní y Todá',
+      anaphoraThree: 'la gratitud viva ante el Creador',
+      actionNoun: 'el ejercicio diario de agradecimiento (Hodaiá)',
+    };
+  }
+
+  const trimmed = (essence || '').trim();
+  const shortFromColon = trimmed.split(':')[0].trim();
+  const shortLabel =
+    shortFromColon.length >= 10 && shortFromColon.length <= 55
+      ? lowercaseFirst(shortFromColon)
+      : trimmed.length <= 50
+      ? lowercaseFirst(trimmed)
+      : options?.isHalakhic
+      ? 'esta norma halájica'
+      : 'este principio de la Torá';
+
+  return {
+    primary: trimmed || 'Estudio de la Torá',
+    shortLabel,
+    anaphoraOne: options?.isHalakhic ? 'esta disposición del Shulján Aruj' : 'este principio ético y textual',
+    anaphoraTwo: options?.isHalakhic ? 'dicha observancia práctica' : 'esta enseñanza rabínica',
+    anaphoraThree: options?.isHalakhic ? 'el cumplimiento consciente del precepto' : 'la vivencia íntima de esta verdad',
+    actionNoun: options?.isHalakhic ? 'esta práctica halájica' : 'esta conducta consciente',
+  };
+}
+
 /**
  * Converts a natural-language question or raw query into a clean conceptual noun-phrase essence.
  */
 export function distillTopicEssence(rawQuery: string, candidateTitle?: string): string {
+  // Preserve both base subject and explicit narrowing sub-angle ("Profundizando y acotando en:")
+  const refineSplitMatch = (rawQuery || '').match(
+    /^([\s\S]+?)\s*[—–-]\s*Profundizando\s+y\s+acotando\s+en\s*:\s*([\s\S]+)$/i
+  );
+  if (refineSplitMatch) {
+    const baseEssence = distillTopicEssence(refineSplitMatch[1].trim());
+    const subAngle = stripWrappedQuotes(refineSplitMatch[2].trim())
+      .replace(/^[¿¡\s]+|[?!.\s]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (subAngle) {
+      const compactSub =
+        subAngle.length > 48
+          ? `${subAngle.slice(0, 45).replace(/\s+\S*$/, '').trim()}…`
+          : subAngle;
+      return `${baseEssence}: ${capitalizeFirst(compactSub)}`;
+    }
+    return baseEssence;
+  }
+
   const cleanCandidate = stripWrappedQuotes((candidateTitle || '').trim());
   const normalizedRaw = normalizeCompare(rawQuery || '');
+
+  // Dedicated topic recognition before generic paraphrasing
+  const hasMourningQueryTerms =
+    /\b(avelut|duelo|luto|aninut|shiv[aá]|shloshim|yahrzeit|kadish|kaddish|vestidura|rasgar|entierro|difunto)\b/i.test(
+      rawQuery || ''
+    );
+  const isPostureQuery =
+    !hasMourningQueryTerms &&
+    /(?<![a-záéíóúñ])(postura|reverencia|inclin(?:arse|amos|an|aci[oó]n|aciones)|keri[aá]|hishtajavai[aá]|postrarse|postraci[oó]n|arrodillarse)(?![a-záéíóúñ])/i.test(
+      rawQuery || ''
+    ) &&
+    !/(?<![a-záéíóúñ])modim\s+de[- ]?raban[aá]n(?![a-záéíóúñ])/i.test(rawQuery || '');
+
+  if (isPostureQuery) {
+    return 'La Postura Corporal, la Inclinación (Keriá) y la Reverencia en la Plegaria';
+  }
+
+  const isGratitudeQuery =
+    /\b(gratitud|hakarat\s+hatov|mod[eé]\s+an[ií]|agradecimiento|agradecer|hodai[aá]|mizmor\s+letod[aá]|tod[aá]\s+rab[aá])\b/i.test(
+      rawQuery || ''
+    ) && !/\b(halel|rosh\s+j[oó]desh)\b/i.test(rawQuery || '');
+
+  if (isGratitudeQuery && !cleanCandidate) {
+    return /\b(mod[eé]\s+an[ií]|despertar|devoluci[oó]n\s+del\s+alma|elohai\s+nesham[aá])\b/i.test(
+      rawQuery || ''
+    )
+      ? 'La Gratitud al Despertar (Modé Aní) y Hakarat HaTov en la Torá'
+      : 'La Gratitud (Hakarat HaTov), Hodaiá y Todá en la Tradición Judía';
+  }
 
   if (cleanCandidate) {
     const strippedPrefix = cleanCandidate
@@ -66,7 +244,8 @@ export function distillTopicEssence(rawQuery: string, candidateTitle?: string): 
     const candidateIsRawEcho =
       !strippedPrefix ||
       normalizeCompare(strippedPrefix) === normalizedRaw ||
-      isConversationalQuestionText(strippedPrefix);
+      isConversationalQuestionText(strippedPrefix) ||
+      /\bo\s+(?:significado|por\s+qu[eé]|qu[eé]\s+es)\b/i.test(strippedPrefix);
 
     if (!candidateIsRawEcho && strippedPrefix.length >= 6) {
       return capitalizeFirst(strippedPrefix);
@@ -96,6 +275,12 @@ export function distillTopicEssence(rawQuery: string, candidateTitle?: string): 
       .trim();
   }
 
+  // Condense disjunctive / repetitive phrasing early
+  const preCondensed = cleanDisjunctiveOrRedundantClauses(s);
+  if (preCondensed !== s) {
+    return capitalizeFirst(preCondensed);
+  }
+
   let distilled = s;
 
   const mWhyDuty = s.match(
@@ -120,35 +305,37 @@ export function distillTopicEssence(rawQuery: string, candidateTitle?: string): 
   const mHowGeneral = s.match(/^c[oó]mo\s+(.+)$/i);
 
   if (mWhyDuty && mWhyDuty[1]) {
-    distilled = `El deber y fundamento espiritual de ${lowercaseFirst(mWhyDuty[1])}`;
+    distilled = `Fundamento espiritual de ${lowercaseFirst(cleanDisjunctiveOrRedundantClauses(mWhyDuty[1]))}`;
   } else if (mWhyGeneral && mWhyGeneral[1]) {
-    distilled = `Sentido y razón profunda de por qué ${lowercaseFirst(mWhyGeneral[1])}`;
+    distilled = `Sentido profundo de ${lowercaseFirst(cleanDisjunctiveOrRedundantClauses(mWhyGeneral[1]))}`;
   } else if (mWhatTorahSays && mWhatTorahSays[1]) {
-    distilled = `La enseñanza de la Torá sobre ${lowercaseFirst(mWhatTorahSays[1])}`;
+    distilled = `Enseñanza de la Torá sobre ${lowercaseFirst(cleanDisjunctiveOrRedundantClauses(mWhatTorahSays[1]))}`;
   } else if (mWhatIs && mWhatIs[1]) {
-    const core = mWhatIs[1].replace(/^(?:el|la|los|las)\s+/i, '').trim();
+    const core = cleanDisjunctiveOrRedundantClauses(mWhatIs[1]).replace(/^(?:el|la|los|las)\s+/i, '').trim();
     distilled =
       core.length <= 45
-        ? `Esencia y significado de ${core} en la Torá`
-        : `Significado espiritual de ${lowercaseFirst(mWhatIs[1])}`;
+        ? `Esencia y sentido de ${core} en la Torá`
+        : `Significado espiritual de ${lowercaseFirst(core)}`;
   } else if (mWhichDiff && mWhichDiff[1]) {
     distilled = `Distinción y relación entre ${lowercaseFirst(mWhichDiff[1])}`;
   } else if (mWhichRole && mWhichRole[1] && mWhichRole[2]) {
-    distilled = `${capitalizeFirst(mWhichRole[1])} de ${lowercaseFirst(mWhichRole[2])}`;
+    const roleNoun = lowercaseFirst(mWhichRole[1]).replace(/^el\s+|^la\s+/, '');
+    const subjectCore = cleanDisjunctiveOrRedundantClauses(mWhichRole[2]);
+    distilled = `${capitalizeFirst(roleNoun)} de ${lowercaseFirst(subjectCore)}`;
   } else if (mHowPractice && mHowPractice[1]) {
-    distilled = `Camino práctico para ${lowercaseFirst(mHowPractice[1])}`;
+    distilled = `Camino práctico para ${lowercaseFirst(cleanDisjunctiveOrRedundantClauses(mHowPractice[1]))}`;
   } else if (mHowGeneral && mHowGeneral[1]) {
-    distilled = `Fundamento y dinámica de ${lowercaseFirst(mHowGeneral[1])}`;
+    distilled = `Fundamento de ${lowercaseFirst(cleanDisjunctiveOrRedundantClauses(mHowGeneral[1]))}`;
   } else {
-    distilled = capitalizeFirst(s);
+    distilled = capitalizeFirst(cleanDisjunctiveOrRedundantClauses(s));
   }
 
   distilled = capitalizeFirst(distilled.replace(/[¿?¡!]+/g, '').replace(/\s+/g, ' ').trim());
 
-  if (distilled.length > 115) {
-    const cut = distilled.slice(0, 112);
+  if (distilled.length > 90) {
+    const cut = distilled.slice(0, 87);
     const lastSpace = cut.lastIndexOf(' ');
-    distilled = (lastSpace > 60 ? cut.slice(0, lastSpace) : cut).trim();
+    distilled = (lastSpace > 48 ? cut.slice(0, lastSpace) : cut).trim();
   }
 
   return distilled || 'Estudio Exegético de la Tradición';

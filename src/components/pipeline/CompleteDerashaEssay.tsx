@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Sparkles,
   Share2,
@@ -20,6 +20,8 @@ import {
   Feather,
   ScrollText,
   ShieldCheck,
+  History,
+  Loader2,
 } from 'lucide-react';
 import { getToneMeta } from '../../utils/toneAdvisor';
 import {
@@ -29,18 +31,22 @@ import {
   FollowUpItem,
   DerashaDuration,
   DerashaMethodology,
+  HalakhicGenerationEra,
+  MishnatHaDorotQuote,
 } from '../../types';
 import {
   getMethodologyMeta,
   METHODOLOGY_DISPLAY_LIST,
   resolveLessonSectionsForExport,
-  buildEditableMarkdown,
-  generateLessonPdfBlob,
-  generateWordDocBlob,
-  generateOpenRtfBlob,
   makeSafeSlug,
   shareOrDownloadFile,
-} from '../../utils/documentExport';
+} from '../../utils/export/shared';
+import {
+  HALAKHIC_GENERATION_ORDER,
+  GENERATION_ERA_META,
+  sortMishnatHaDorotChronologically,
+} from '../../utils/mishnatHaDorotClassifier';
+import { fetchMishnatHaDorotQuotes } from '../../services/api';
 import { evaluateSourceTranslationStatus, stripAllHtml } from '../../services/sefaria';
 
 interface CompleteDerashaEssayProps {
@@ -65,6 +71,7 @@ interface CompleteDerashaEssayProps {
   onTranslateAllSources?: () => Promise<void>;
   isTranslatingRef?: string | null;
   isTranslatingAll?: boolean;
+  onSaveMishnatHaDorotQuotes?: (quotes: MishnatHaDorotQuote[]) => void;
 }
 
 const SECTION_ACCENTS = [
@@ -110,12 +117,129 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
   onTranslateAllSources,
   isTranslatingRef,
   isTranslatingAll = false,
+  onSaveMishnatHaDorotQuotes,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showAddMethodPicker, setShowAddMethodPicker] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showInlineSources, setShowInlineSources] = useState(false);
+
+  const activeHalakhicConsultation =
+    derasha.halakhicConsultation || phase1Data?.halakhicConsultation;
+  const [localMishnatQuotes, setLocalMishnatQuotes] = useState<MishnatHaDorotQuote[]>(
+    activeHalakhicConsultation?.mishnatHaDorotQuotes || []
+  );
+  const [isLoadingMishnat, setIsLoadingMishnat] = useState(false);
+  const [mishnatError, setMishnatError] = useState<string | null>(null);
+  const [selectedEraFilter, setSelectedEraFilter] = useState<HalakhicGenerationEra | 'ALL'>('ALL');
+  const [selectedSourceRefFilter, setSelectedSourceRefFilter] = useState<string>('ALL');
+  const autoFetchedKeyRef = useRef<string>('');
+
+  const mishnatRefsKey = useMemo(() => {
+    if (!activeHalakhicConsultation?.active || !activeHalakhicConsultation.directQuotes?.length) {
+      return '';
+    }
+    return activeHalakhicConsultation.directQuotes.map((q) => q.ref).join('|');
+  }, [activeHalakhicConsultation]);
+
+  useEffect(() => {
+    const existing = activeHalakhicConsultation?.mishnatHaDorotQuotes;
+    if (existing && existing.length > 0) {
+      setLocalMishnatQuotes(existing);
+    } else if (!mishnatRefsKey) {
+      setLocalMishnatQuotes([]);
+    }
+  }, [activeHalakhicConsultation?.mishnatHaDorotQuotes, mishnatRefsKey]);
+
+  const handleLoadMishnatHaDorot = useCallback(
+    async (
+      eraOverride?: HalakhicGenerationEra | 'ALL',
+      targetSourceRef?: string
+    ) => {
+      if (!activeHalakhicConsultation?.active || !activeHalakhicConsultation.directQuotes?.length) {
+        return;
+      }
+      const effectiveEra = eraOverride ?? selectedEraFilter;
+      const effectiveSourceRef = targetSourceRef ?? selectedSourceRefFilter;
+      const refsToQuery =
+        effectiveSourceRef !== 'ALL'
+          ? activeHalakhicConsultation.directQuotes.filter(
+              (q) => q.ref.toLowerCase() === effectiveSourceRef.toLowerCase()
+            )
+          : activeHalakhicConsultation.directQuotes;
+
+      setIsLoadingMishnat(true);
+      setMishnatError(null);
+      try {
+        const result = await fetchMishnatHaDorotQuotes({
+          refs: refsToQuery.map((q) => ({
+            ref: q.ref,
+            simanSeifLabel: q.simanSeifLabel,
+            topicLabel: q.topicLabel,
+          })),
+          query: derasha.derashaTitle || phase1Data?.title || '',
+          eraFilter: effectiveEra,
+        });
+
+        setLocalMishnatQuotes((prev) => {
+          const mergedMap = new Map<string, MishnatHaDorotQuote>();
+          if (effectiveEra !== 'ALL' || effectiveSourceRef !== 'ALL') {
+            for (const existingItem of prev) {
+              mergedMap.set(existingItem.ref.toLowerCase(), existingItem);
+            }
+          }
+          for (const newItem of result.quotes || []) {
+            mergedMap.set(newItem.ref.toLowerCase(), newItem);
+          }
+          const combined = sortMishnatHaDorotChronologically(Array.from(mergedMap.values()));
+          onSaveMishnatHaDorotQuotes?.(combined);
+          return combined;
+        });
+      } catch (err: any) {
+        setMishnatError(
+          err?.message || 'No se pudieron recuperar dictámenes de Mishnat HaDorot.'
+        );
+      } finally {
+        setIsLoadingMishnat(false);
+      }
+    },
+    [
+      activeHalakhicConsultation,
+      selectedEraFilter,
+      selectedSourceRefFilter,
+      derasha.derashaTitle,
+      phase1Data?.title,
+      onSaveMishnatHaDorotQuotes,
+    ]
+  );
+
+  useEffect(() => {
+    if (!mishnatRefsKey) return;
+    if (
+      activeHalakhicConsultation?.mishnatHaDorotQuotes &&
+      activeHalakhicConsultation.mishnatHaDorotQuotes.length > 0
+    ) {
+      autoFetchedKeyRef.current = mishnatRefsKey;
+      return;
+    }
+    if (autoFetchedKeyRef.current === mishnatRefsKey) return;
+    autoFetchedKeyRef.current = mishnatRefsKey;
+    void handleLoadMishnatHaDorot('ALL', 'ALL');
+  }, [mishnatRefsKey, activeHalakhicConsultation?.mishnatHaDorotQuotes, handleLoadMishnatHaDorot]);
+
+  const filteredMishnatQuotes = useMemo(() => {
+    return localMishnatQuotes.filter((q) => {
+      if (selectedEraFilter !== 'ALL' && q.generationEra !== selectedEraFilter) return false;
+      if (
+        selectedSourceRefFilter !== 'ALL' &&
+        q.sourceShulchanArukhRef.toLowerCase() !== selectedSourceRefFilter.toLowerCase()
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [localMishnatQuotes, selectedEraFilter, selectedSourceRefFilter]);
 
   const evaluatedSources = useMemo(
     () =>
@@ -189,6 +313,7 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
       : 'Drashá Estándar · 10 min';
 
   const handleCopyFullEssay = useCallback(async () => {
+    const { buildEditableMarkdown } = await import('../../utils/export/markdownExport');
     const fullText = buildEditableMarkdown({
       query: derasha.derashaTitle || phase1Data?.title || 'Estudio de Torá',
       phase1: phase1Data,
@@ -214,6 +339,7 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
       const slug = makeSafeSlug(
         derasha.derashaTitle || phase1Data?.title || 'leccion-drasha'
       );
+      const { generateLessonPdfBlob } = await import('../../utils/export/pdfExport');
       const blob = await generateLessonPdfBlob({
         query: derasha.derashaTitle || phase1Data?.title || 'Estudio de Torá',
         phase1: phase1Data,
@@ -244,6 +370,7 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
   }, [derasha, phase1Data, sources, followUps, methodMeta.label, durationBadgeLabel, onOpenExport]);
 
   const handleQuickEditableWord = useCallback(async () => {
+    const { generateWordDocBlob } = await import('../../utils/export/htmlWordExport');
     const slug = makeSafeSlug(
       derasha.derashaTitle || phase1Data?.title || 'leccion-drasha'
     );
@@ -267,6 +394,7 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
   }, [derasha, phase1Data, sources, followUps]);
 
   const handleQuickOpenRtf = useCallback(async () => {
+    const { generateOpenRtfBlob } = await import('../../utils/export/rtfExport');
     const slug = makeSafeSlug(
       derasha.derashaTitle || phase1Data?.title || 'leccion-drasha'
     );
@@ -648,10 +776,8 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
           </section>
         )}
 
-        {/* Módulo Halájico: Citas Breves y Directas del Shulján Aruj (Sin Filosofía Externa) */}
+        {/* Módulo Halájico: Citas Breves y Directas del Shulján Aruj + Mishnat HaDorot (Sin Filosofía Externa) */}
         {(() => {
-          const activeHalakhicConsultation =
-            derasha.halakhicConsultation || phase1Data?.halakhicConsultation;
           if (
             !activeHalakhicConsultation?.active ||
             !activeHalakhicConsultation.directQuotes?.length
@@ -660,7 +786,7 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
           }
 
           return (
-            <section className="rounded-2xl bg-emerald-950/20 border border-emerald-500/35 p-5 sm:p-6 space-y-4">
+            <section className="rounded-2xl bg-emerald-950/20 border border-emerald-500/35 p-5 sm:p-6 space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-3">
                 <div className="space-y-0.5">
                   <span className="text-[11px] font-bold uppercase tracking-widest text-emerald-300 flex items-center gap-1.5">
@@ -716,20 +842,251 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-[11px]">
                       <span className="text-slate-400 font-mono truncate">{q.ref}</span>
-                      <a
-                        href={q.sefariaUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200 font-medium shrink-0"
-                      >
-                        <span>Sefaria</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSourceRefFilter(q.ref);
+                            void handleLoadMishnatHaDorot(selectedEraFilter, q.ref);
+                          }}
+                          className="inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 font-medium cursor-pointer"
+                          title={`Consultar dictámenes generacionales (Mishnat HaDorot) vinculados a ${q.simanSeifLabel}`}
+                        >
+                          <History className="w-3 h-3" />
+                          <span>Mishnat HaDorot</span>
+                        </button>
+                        <a
+                          href={q.sefariaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200 font-medium"
+                        >
+                          <span>Sefaria</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Subsección Suplementaria: Mishnat HaDorot (Dictamen Halájico por Generaciones) */}
+              <div className="pt-4 border-t border-emerald-500/25 space-y-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-amber-300 flex items-center gap-1.5">
+                        <History className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Mishnat HaDorot · Dictamen por Generaciones</span>
+                      </span>
+                      <span className="font-hebrew text-xs text-amber-200/90" dir="rtl">
+                        מִשְׁנַת הַדּוֹרוֹת
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300">
+                      Cadena normativa desde Jazal y los Rishonim hasta los Nosei Keilim, Ajaronim y Poskim contemporáneos vinculada a las citas del Shulján Aruj en Sefaria.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadMishnatHaDorot(selectedEraFilter, selectedSourceRefFilter)}
+                    disabled={isLoadingMishnat}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-amber-200 transition cursor-pointer disabled:opacity-60"
+                  >
+                    {isLoadingMishnat ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {isLoadingMishnat
+                        ? 'Consultando Sefaria...'
+                        : localMishnatQuotes.length > 0
+                        ? 'Actualizar Generaciones'
+                        : 'Consultar Mishnat HaDorot'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Filtros por Generación y por Simán:Seif */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEraFilter('ALL');
+                        if (localMishnatQuotes.length === 0) {
+                          void handleLoadMishnatHaDorot('ALL', selectedSourceRefFilter);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition cursor-pointer ${
+                        selectedEraFilter === 'ALL'
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 font-semibold'
+                          : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:border-amber-500/40'
+                      }`}
+                    >
+                      Todas ({localMishnatQuotes.length})
+                    </button>
+                    {HALAKHIC_GENERATION_ORDER.map((era) => {
+                      const meta = GENERATION_ERA_META[era];
+                      const count = localMishnatQuotes.filter((q) => q.generationEra === era).length;
+                      const isActive = selectedEraFilter === era;
+                      return (
+                        <button
+                          key={era}
+                          type="button"
+                          onClick={() => {
+                            setSelectedEraFilter(era);
+                            if (count === 0) {
+                              void handleLoadMishnatHaDorot(era, selectedSourceRefFilter);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition cursor-pointer ${
+                            isActive
+                              ? 'bg-amber-400 text-slate-950 border-amber-300 font-semibold'
+                              : count > 0
+                              ? 'bg-slate-950/70 text-slate-200 border-slate-700 hover:border-amber-500/40'
+                              : 'bg-slate-950/40 text-slate-400 border-slate-800/80 hover:text-slate-200'
+                          }`}
+                          title={`${meta.label} (${meta.periodDefault})`}
+                        >
+                          {meta.shortLabel}
+                          {count > 0 ? ` (${count})` : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeHalakhicConsultation.directQuotes.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="text-slate-400 mr-1">Simán base:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSourceRefFilter('ALL')}
+                        className={`px-2 py-0.5 rounded-md border cursor-pointer transition ${
+                          selectedSourceRefFilter === 'ALL'
+                            ? 'bg-emerald-500/25 border-emerald-400/50 text-emerald-200 font-semibold'
+                            : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Todos
+                      </button>
+                      {activeHalakhicConsultation.directQuotes.map((dq) => (
+                        <button
+                          key={`src-filter-${dq.id}`}
+                          type="button"
+                          onClick={() => setSelectedSourceRefFilter(dq.ref)}
+                          className={`px-2 py-0.5 rounded-md border cursor-pointer transition ${
+                            selectedSourceRefFilter.toLowerCase() === dq.ref.toLowerCase()
+                              ? 'bg-emerald-500/25 border-emerald-400/50 text-emerald-200 font-semibold'
+                              : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {dq.simanSeifLabel}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {mishnatError && (
+                  <p className="text-xs text-rose-300 bg-rose-950/30 border border-rose-500/30 rounded-lg px-3 py-2">
+                    {mishnatError}
+                  </p>
+                )}
+
+                {isLoadingMishnat && filteredMishnatQuotes.length === 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[1, 2].map((skeletonIdx) => (
+                      <div
+                        key={skeletonIdx}
+                        className="p-4 rounded-xl bg-slate-950/50 border border-emerald-500/15 space-y-2.5 animate-pulse"
+                      >
+                        <div className="h-3.5 w-40 bg-slate-800 rounded" />
+                        <div className="h-12 bg-slate-900 rounded-lg" />
+                        <div className="h-10 bg-slate-900/70 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredMishnatQuotes.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {filteredMishnatQuotes.map((mq) => {
+                      const eraMeta = GENERATION_ERA_META[mq.generationEra];
+                      return (
+                        <div
+                          key={mq.id}
+                          className="p-3.5 rounded-xl bg-slate-950/80 border border-amber-500/25 space-y-2 flex flex-col justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${eraMeta.badgeClasses}`}
+                                  >
+                                    {eraMeta.shortLabel} · {mq.periodLabel}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-emerald-300/90 bg-emerald-950/40 border border-emerald-500/25 px-1.5 py-0.5 rounded">
+                                    Sobre {mq.sourceSimanSeifLabel}
+                                  </span>
+                                </div>
+                                <h5 className="text-xs sm:text-sm font-semibold text-white">
+                                  {mq.authorityName}
+                                </h5>
+                              </div>
+                              <span
+                                className="text-[10px] font-mono text-slate-400 shrink-0 text-right max-w-[130px] truncate"
+                                dir="rtl"
+                                title={mq.heRef}
+                              >
+                                {mq.heRef}
+                              </span>
+                            </div>
+
+                            <p
+                              className="font-hebrew text-xs sm:text-sm text-amber-100/95 bg-slate-900/70 rounded-lg px-3 py-2 border border-slate-800/90 leading-relaxed"
+                              dir="rtl"
+                            >
+                              «{mq.hebrewText}»
+                            </p>
+
+                            <p className="text-xs text-slate-200 leading-relaxed">
+                              {mq.spanishTranslation}
+                            </p>
+
+                            {mq.rulingEvolutionNote && (
+                              <p className="text-[11px] text-amber-200/90 leading-relaxed bg-amber-950/20 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
+                                <strong>Dictamen generacional:</strong> {mq.rulingEvolutionNote}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
+                            <span className="text-slate-400 font-mono truncate">{mq.ref}</span>
+                            <a
+                              href={mq.sefariaUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 font-medium shrink-0"
+                            >
+                              <span>Sefaria</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic bg-slate-950/40 border border-slate-800/70 rounded-lg px-3 py-2.5">
+                    {selectedEraFilter === 'ALL'
+                      ? 'Haz clic en «Consultar Mishnat HaDorot» para recuperar las fuentes por generación vinculadas en Sefaria.'
+                      : `No hay citas cargadas aún para «${GENERATION_ERA_META[selectedEraFilter].shortLabel}». Pulsa «Actualizar Generaciones» o cambia el filtro de Simán.`}
+                  </p>
+                )}
               </div>
             </section>
           );

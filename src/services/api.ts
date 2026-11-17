@@ -11,18 +11,13 @@ import {
   DerashaDuration,
   DerashaTone,
   MethodologyDeliberationResult,
-  YouTubeVisualAnalysisResult,
-  YouTubeVisualStyle,
-  YouTubeOutputMode,
-  YouTubeAspectRatio,
-  YouTubeImageQualityTier,
-  YouTubeGeneratedVideoClip,
+  HalakhicGenerationEra,
+  MishnatHaDorotQuote,
 } from '../types';
 import {
-  buildClientMethodologyDeliberationFallback,
-  buildClientPhase1Fallback,
-  buildClientPhase3DerashaFallback,
-} from './pipelineFallbackEngine';
+  classifySefariaLinkCandidate,
+  sortMishnatHaDorotChronologically,
+} from '../utils/mishnatHaDorotClassifier';
 
 export interface HealthStatus {
   status: string;
@@ -76,10 +71,21 @@ export class LongWaitTimeoutError extends Error {
   }
 }
 
+export class ApiHttpError extends Error {
+  status: number;
+  errorCode?: string;
+  constructor(message: string, status: number, errorCode?: string) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.status = status;
+    this.errorCode = errorCode;
+  }
+}
+
 class HtmlFallbackResponseError extends Error {
   constructor(endpointLabel: string) {
     super(
-      `No hay respuestas disponibles de momento en ${endpointLabel} (el servidor se está actualizando). Intenta nuevamente en unos segundos.`
+      `No hay respuestas disponibles de momento en ${endpointLabel} (el servidor o proxy devolvió una página temporal). Intenta nuevamente en unos segundos.`
     );
     this.name = 'HtmlFallbackResponseError';
   }
@@ -91,32 +97,54 @@ export function resolveApiUrl(endpointPath: string): string {
 }
 
 /**
- * Fetches JSON from a backend route with automatic retry if the container/server
- * is waking up and temporarily returns HTML or 502/503/504, bounded by a strict timeout.
+ * Fetches JSON from a backend route with fast transient retry when the server
+ * briefly returns HTML or 502/503 during warm-up, without misclassifying fast
+ * failures as long-wait timeouts.
  */
 async function fetchServerJsonWithRetry<T>(
   url: string,
   options: RequestInit,
   endpointLabel: string,
-  maxAttempts = 4,
-  timeoutMs = 300000
+  maxAttempts = 2,
+  timeoutMs = 150000
 ): Promise<T> {
   let lastErr: any = null;
   const resolvedUrl = resolveApiUrl(url);
+  const totalAttempts = Math.max(1, maxAttempts);
+  const externalSignal = options.signal;
+  const overallStartMs = Date.now();
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    if (externalSignal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    const attemptStartMs = Date.now();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let timedOut = false;
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+
     try {
       const response = await fetch(resolvedUrl, {
         ...options,
-        signal: options.signal || controller.signal,
+        signal: controller.signal,
       });
       clearTimeout(timer);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
 
       const contentType = response.headers.get('content-type') || '';
       const rawText = await response.text();
       const trimmed = rawText.trim();
+      const attemptElapsedMs = Date.now() - attemptStartMs;
 
       const isHtml =
         contentType.includes('text/html') ||
@@ -125,64 +153,90 @@ async function fetchServerJsonWithRetry<T>(
         trimmed.startsWith('<html');
 
       if (isHtml) {
+        if (response.status === 504 && Date.now() - overallStartMs >= 35000) {
+          throw new LongWaitTimeoutError(
+            'La consulta superó el tiempo máximo permitido por la conexión del servidor. Intenta acotar la pregunta o vuelve a intentarlo.'
+          );
+        }
         lastErr = new HtmlFallbackResponseError(endpointLabel);
-        if (attempt < maxAttempts) {
-          await new Promise((r) => setTimeout(r, 1200 * attempt));
+        if (attempt < totalAttempts && attemptElapsedMs < 12000) {
+          await new Promise((r) => setTimeout(r, 900 * attempt));
           continue;
         }
-        throw new LongWaitTimeoutError(lastErr.message);
+        throw lastErr;
       }
 
       if (!response.ok) {
-        if (
-          (response.status === 502 || response.status === 503 || response.status === 504) &&
-          attempt < maxAttempts
-        ) {
-          await new Promise((r) => setTimeout(r, 1200 * attempt));
-          continue;
-        }
         let errMsg = `No hay respuestas disponibles de momento (${response.status}) en ${endpointLabel}`;
+        let errCode: string | undefined;
         if (trimmed.startsWith('{')) {
           try {
             const parsedErr = JSON.parse(trimmed);
             if (parsedErr?.error) errMsg = parsedErr.error;
+            if (parsedErr?.errorCode) errCode = String(parsedErr.errorCode);
           } catch {
             // ignore
           }
         }
         if (
-          errMsg.includes('tiempo de espera') ||
-          errMsg.includes('No hay respuestas disponibles de momento')
+          !errCode &&
+          (response.status === 502 || response.status === 503) &&
+          attempt < totalAttempts &&
+          attemptElapsedMs < 12000
+        ) {
+          await new Promise((r) => setTimeout(r, 900 * attempt));
+          continue;
+        }
+        if (
+          errCode === 'AI_TIMEOUT' ||
+          (!errCode && response.status === 504 && Date.now() - overallStartMs >= 25000)
         ) {
           throw new LongWaitTimeoutError(errMsg);
         }
-        throw new Error(errMsg);
+        throw new ApiHttpError(errMsg, response.status, errCode);
       }
 
       return JSON.parse(trimmed) as T;
     } catch (err: any) {
       clearTimeout(timer);
-      if (err?.name === 'AbortError' || err instanceof LongWaitTimeoutError) {
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
+      if (externalSignal?.aborted) {
+        throw err?.name === 'AbortError' ? err : new DOMException('Aborted', 'AbortError');
+      }
+      if (timedOut || err instanceof LongWaitTimeoutError) {
         throw new LongWaitTimeoutError(
           err?.message && err?.name === 'LongWaitTimeoutError'
             ? err.message
-            : 'No hay respuestas disponibles de momento (tiempo de espera agotado). Por favor aclara o acota tu consulta.'
+            : 'La consulta superó el límite de respuesta del servidor. Por favor aclara o acota tu pregunta e inténtalo de nuevo.'
         );
       }
+      if (err?.name === 'AbortError') {
+        throw new ApiHttpError(
+          'La conexión con el servidor se interrumpió antes de completar la respuesta. Intenta nuevamente.',
+          503,
+          'CONNECTION_ABORTED'
+        );
+      }
+      if (err instanceof ApiHttpError) {
+        throw err;
+      }
       lastErr = err;
-      if (err instanceof HtmlFallbackResponseError && attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 1200 * attempt));
+      const attemptElapsedMs = Date.now() - attemptStartMs;
+      if (attempt < totalAttempts && attemptElapsedMs < 12000) {
+        await new Promise((r) =>
+          setTimeout(r, err instanceof HtmlFallbackResponseError ? 900 * attempt : 350 * attempt)
+        );
         continue;
       }
-      if (attempt >= maxAttempts) {
-        throw lastErr;
-      }
+      throw lastErr;
     }
   }
 
   throw (
     lastErr ||
-    new LongWaitTimeoutError(`No hay respuestas disponibles de momento en ${endpointLabel}`)
+    new ApiHttpError(`No hay respuestas disponibles de momento en ${endpointLabel}`, 503)
   );
 }
 
@@ -206,31 +260,31 @@ export async function checkServerHealth(): Promise<HealthStatus> {
 
 export async function requestDecideMethodology(
   query: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  tonoHomiletico?: DerashaTone
 ): Promise<MethodologyDeliberationResult> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
   };
 
-  try {
-    const res = await fetchServerJsonWithRetry<MethodologyDeliberationResult>(
-      '/api/decide-methodology',
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ query, tema_o_fuente: query }),
-        signal,
-      },
-      '/api/decide-methodology',
-      1,
-      60000
-    );
-    return sanitizeStrictJewishObject(res);
-  } catch (err: any) {
-    if (signal?.aborted) throw err;
-    return sanitizeStrictJewishObject(buildClientMethodologyDeliberationFallback(query));
-  }
+  const res = await fetchServerJsonWithRetry<MethodologyDeliberationResult>(
+    '/api/decide-methodology',
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        query,
+        tema_o_fuente: query,
+        ...(tonoHomiletico ? { tono_homiletico: tonoHomiletico } : {}),
+      }),
+      signal,
+    },
+    '/api/decide-methodology',
+    1,
+    25000
+  );
+  return sanitizeStrictJewishObject(res);
 }
 
 export async function requestPhase1Analysis(
@@ -241,6 +295,7 @@ export async function requestPhase1Analysis(
     duracion?: DerashaDuration;
     audiencia_o_tono?: string;
     tono_homiletico?: DerashaTone;
+    signal?: AbortSignal;
   }
 ): Promise<Phase1AnalysisResult> {
   const headers: Record<string, string> = {
@@ -248,79 +303,69 @@ export async function requestPhase1Analysis(
     Accept: 'application/json',
   };
 
-  try {
-    const res = await fetchServerJsonWithRetry<Phase1AnalysisResult>(
-      '/api/analyze-roots',
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          query,
-          tema_o_fuente: query,
-          metodologia: options?.metodologia || 'PARDES',
-          metodologias_complementarias: options?.metodologias_complementarias || [],
-          duracion: options?.duracion || '10_MIN',
-          audiencia_o_tono: options?.audiencia_o_tono || 'Comunidad general · Inspirador y práctico',
-          ...(options?.tono_homiletico ? { tono_homiletico: options.tono_homiletico } : {}),
-        }),
-      },
-      '/api/analyze-roots',
-      4,
-      240000
-    );
-    return sanitizeStrictJewishObject(res);
-  } catch {
-    return sanitizeStrictJewishObject(
-      buildClientPhase1Fallback(query, {
-        metodologia: options?.metodologia,
-        metodologias_complementarias: options?.metodologias_complementarias,
-        duracion: options?.duracion,
-        tono_homiletico: options?.tono_homiletico,
-      })
-    );
-  }
+  const res = await fetchServerJsonWithRetry<Phase1AnalysisResult>(
+    '/api/analyze-roots',
+    {
+      method: 'POST',
+      headers,
+      signal: options?.signal,
+      body: JSON.stringify({
+        query,
+        tema_o_fuente: query,
+        metodologia: options?.metodologia || 'AUTO',
+        metodologias_complementarias: options?.metodologias_complementarias || [],
+        duracion: options?.duracion || '10_MIN',
+        audiencia_o_tono: options?.audiencia_o_tono || 'Comunidad general · Inspirador y práctico',
+        ...(options?.tono_homiletico ? { tono_homiletico: options.tono_homiletico } : {}),
+      }),
+    },
+    '/api/analyze-roots',
+    2,
+    180000
+  );
+  return sanitizeStrictJewishObject(res);
 }
 
-export async function requestPhase3Derasha(payload: {
-  query: string;
-  tema_o_fuente?: string;
-  metodologia?: DerashaMethodology;
-  metodologias_complementarias?: DerashaMethodology[];
-  duracion?: DerashaDuration;
-  audiencia_o_tono?: string;
-  tono_homiletico?: DerashaTone;
-  title: string;
-  primaryHebrew: string;
-  transliteration: string;
-  literalSpanishTranslation: string;
-  liturgicalContext: string;
-  theologicalKeys?: any;
-  morphologicalBreakdown: any[];
-  verifiedSources: VerifiedSefariaSource[];
-  externalSources?: any[];
-  formalContrast?: any;
-}): Promise<FinalDerasha> {
+export async function requestPhase3Derasha(
+  payload: {
+    query: string;
+    tema_o_fuente?: string;
+    metodologia?: DerashaMethodology;
+    metodologias_complementarias?: DerashaMethodology[];
+    duracion?: DerashaDuration;
+    audiencia_o_tono?: string;
+    tono_homiletico?: DerashaTone;
+    title: string;
+    primaryHebrew: string;
+    transliteration: string;
+    literalSpanishTranslation: string;
+    liturgicalContext: string;
+    theologicalKeys?: any;
+    morphologicalBreakdown: any[];
+    verifiedSources: VerifiedSefariaSource[];
+    externalSources?: any[];
+    formalContrast?: any;
+  },
+  signal?: AbortSignal
+): Promise<FinalDerasha> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
   };
 
-  try {
-    const res = await fetchServerJsonWithRetry<FinalDerasha>(
-      '/api/generate-derasha',
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      },
-      '/api/generate-derasha',
-      4,
-      600000
-    );
-    return sanitizeStrictJewishObject(res);
-  } catch {
-    return sanitizeStrictJewishObject(buildClientPhase3DerashaFallback(payload));
-  }
+  const res = await fetchServerJsonWithRetry<FinalDerasha>(
+    '/api/generate-derasha',
+    {
+      method: 'POST',
+      headers,
+      signal,
+      body: JSON.stringify(payload),
+    },
+    '/api/generate-derasha',
+    2,
+    360000
+  );
+  return sanitizeStrictJewishObject(res);
 }
 
 export async function requestExpandDerasha(payload: {
@@ -758,7 +803,7 @@ export async function fetchTorahCalendar(params?: {
       `/api/torah-calendar?${queryParams.toString()}`,
       { headers: { Accept: 'application/json' } },
       '/api/torah-calendar',
-      0,
+      1,
       8000
     );
   } catch {
@@ -932,7 +977,7 @@ export async function requestMesilatShot(payload?: {
         body: JSON.stringify(payload || {}),
       },
       '/api/mesilat-shot',
-      0,
+      1,
       18000
     );
   } catch {
@@ -997,87 +1042,119 @@ export async function requestMesilatShot(payload?: {
   }
 }
 
-export function extractYouTubeUrlFromText(text: string): string | null {
-  const match = String(text || '').match(
-    /(https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}[^\s]*)/i
-  );
-  return match ? match[1] : null;
+export interface MishnatHaDorotResponse {
+  quotes: MishnatHaDorotQuote[];
+  generationsRepresented: HalakhicGenerationEra[];
+  sourceRefsConsulted: string[];
+  fetchedFromSefariaCount: number;
+  cacheHit?: boolean;
 }
 
-export async function requestAnalyzeYouTubeVisuals(payload: {
-  youtubeUrl: string;
-  outputMode?: YouTubeOutputMode;
-  visualStyle?: YouTubeVisualStyle;
-  aspectRatio?: YouTubeAspectRatio;
-  imageQuality?: YouTubeImageQualityTier;
-  customFocus?: string;
-}): Promise<YouTubeVisualAnalysisResult> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  };
+export async function fetchMishnatHaDorotQuotes(payload: {
+  refs: Array<{ ref: string; simanSeifLabel?: string; topicLabel?: string }>;
+  query?: string;
+  eraFilter?: HalakhicGenerationEra | 'ALL';
+}): Promise<MishnatHaDorotResponse> {
+  const cleanRefs = (payload.refs || [])
+    .filter((r) => r && r.ref)
+    .slice(0, 4);
+  if (cleanRefs.length === 0) {
+    return {
+      quotes: [],
+      generationsRepresented: [],
+      sourceRefsConsulted: [],
+      fetchedFromSefariaCount: 0,
+    };
+  }
 
-  return await fetchServerJsonWithRetry<YouTubeVisualAnalysisResult>(
-    '/api/analyze-youtube-visuals',
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    },
-    '/api/analyze-youtube-visuals',
-    2,
-    240000
-  );
-}
+  try {
+    return await fetchServerJsonWithRetry<MishnatHaDorotResponse>(
+      '/api/mishnat-hadorot',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          refs: cleanRefs,
+          query: payload.query || '',
+          eraFilter: payload.eraFilter || 'ALL',
+        }),
+      },
+      '/api/mishnat-hadorot',
+      1,
+      28000
+    );
+  } catch {
+    // Resilient direct client-side Sefaria /api/links fallback
+    const allQuotes: MishnatHaDorotQuote[] = [];
+    const seen = new Set<string>();
+    const eraFilter = payload.eraFilter || 'ALL';
 
-export async function requestRegenerateYouTubeIllustration(payload: {
-  prompt: string;
-  visualStyle: YouTubeVisualStyle;
-  aspectRatio: YouTubeAspectRatio;
-  imageQuality: YouTubeImageQualityTier;
-  title?: string;
-}): Promise<{ imageDataUrl: string; imageModelUsed: string }> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  };
+    await Promise.all(
+      cleanRefs.map(async (item) => {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 4500);
+          const res = await fetch(
+            `https://www.sefaria.org/api/links/${encodeURIComponent(
+              item.ref
+            )}?with_text=1`,
+            {
+              headers: { Accept: 'application/json' },
+              signal: controller.signal,
+            }
+          ).finally(() => clearTimeout(timer));
+          if (!res.ok) return;
+          const rawLinks = await res.json();
+          if (!Array.isArray(rawLinks)) return;
 
-  return await fetchServerJsonWithRetry<{ imageDataUrl: string; imageModelUsed: string }>(
-    '/api/generate-youtube-illustration',
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    },
-    '/api/generate-youtube-illustration',
-    1,
-    120000
-  );
-}
+          for (const link of rawLinks) {
+            const c = classifySefariaLinkCandidate(link);
+            if (!c) continue;
+            if (eraFilter !== 'ALL' && c.generationEra !== eraFilter) continue;
+            const key = `${item.ref.toLowerCase()}::${c.authorityName.toLowerCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
 
-export async function requestGenerateYouTubeAnimation(payload: {
-  prompt: string;
-  aspectRatio: YouTubeAspectRatio;
-  duration?: '6s' | '10s';
-  resolution?: '720p' | '1080p';
-  referenceImages?: Array<{ mimeType: string; data: string }>;
-}): Promise<YouTubeGeneratedVideoClip> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  };
+            const simanSeifLabel =
+              item.simanSeifLabel || item.ref.replace(/^Shulchan Arukh,\s*/i, '');
+            allQuotes.push({
+              id: `mhd-client-${allQuotes.length}-${c.generationEra.toLowerCase()}`,
+              sourceShulchanArukhRef: item.ref,
+              sourceSimanSeifLabel: simanSeifLabel,
+              generationEra: c.generationEra,
+              generationLabel: c.generationLabel,
+              periodLabel: c.periodLabel,
+              authorityName: c.authorityName,
+              ref: c.ref,
+              heRef: c.heRef,
+              hebrewText: c.hebrewText,
+              ...(c.englishText ? { englishText: c.englishText } : {}),
+              spanishTranslation: c.englishText
+                ? c.englishText.slice(0, 380)
+                : `Fuente canónica de ${c.authorityName} (${c.ref}) vinculada en Sefaria a ${simanSeifLabel}.`,
+              sefariaUrl: c.sefariaUrl,
+              verifiedFromSefaria: true,
+            });
+          }
+        } catch {
+          // ignore network error per ref
+        }
+      })
+    );
 
-  return await fetchServerJsonWithRetry<YouTubeGeneratedVideoClip>(
-    '/api/generate-youtube-animation',
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    },
-    '/api/generate-youtube-animation',
-    1,
-    330000
-  );
+    const sorted = sortMishnatHaDorotChronologically(allQuotes).slice(0, 8);
+    return {
+      quotes: sorted,
+      generationsRepresented: Array.from(
+        new Set(sorted.map((q) => q.generationEra))
+      ) as HalakhicGenerationEra[],
+      sourceRefsConsulted: cleanRefs.map((r) => r.ref),
+      fetchedFromSefariaCount: allQuotes.length,
+    };
+  }
 }
 
 

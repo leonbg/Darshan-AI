@@ -41,10 +41,17 @@ self.addEventListener('fetch', (event) => {
       caches.open('darshan-fonts-cache').then(async (cache) => {
         const cached = await cache.match(request);
         if (cached) return cached;
-        const response = await fetch(request);
-        if (response.ok) cache.put(request, response.clone());
-        return response;
-      }).catch(() => fetch(request))
+        try {
+          const response = await fetch(request);
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        } catch {
+          return Response.error();
+        }
+      }).catch(async () => {
+        const fallback = await caches.match(request);
+        return fallback || Response.error();
+      })
     );
     return;
   }

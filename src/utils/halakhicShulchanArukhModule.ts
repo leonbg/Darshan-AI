@@ -22,12 +22,14 @@ interface ShulchanArukhCorpusEntry {
   mejaberAndRamaNote?: string;
   subtopicKeywords: RegExp;
   defaultPriority: number;
+  specializedOnly?: boolean;
 }
 
 const BRANCH_LABELS: Record<HalakhicConsultationFocus, string> = {
   REZOS: 'Leyes de los Rezos (Oraj Jaim)',
   FESTIVIDADES: 'Leyes de las Festividades y Shabat (Oraj Jaim)',
   KASHRUT: 'Leyes de Kashrut (Yoré Deá)',
+  CICLO_DE_VIDA: 'Leyes del Duelo (Avelut) y Ciclo de Vida (Yoré Deá)',
   HALAJA_GENERAL: 'Halajá General y Minhag (Shulján Aruj)',
 };
 
@@ -49,8 +51,28 @@ const SHULCHAN_ARUKH_CORPUS: ShulchanArukhCorpusEntry[] = [
       'One should strengthen oneself like a lion to rise in the morning for the service of one’s Creator (Mechaber); Rema: "I have set Hashem before me always" (Ps. 16:8) is a great foundational principle.',
     mejaberAndRamaNote:
       'Mejaber exige vigor práctico al despertar; el Ramá añade la conciencia contemplativa continua (Shiviti).',
-    subtopicKeywords: /\b(shajarit|ma[ñn]ana|despertar|despertarse|servicio|modo|inicio|tefil[aá]|rezos?|shiviti|mejaber|ram[aá])\b/i,
-    defaultPriority: 92,
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:shajarit|ma[ñn]ana|despertar|despertarse|mod[eé]\s+an[ií]|le[oó]n|shiviti|inicio\s+del\s+d[ií]a)(?![a-záéíóúñ])/i,
+    defaultPriority: 75,
+    specializedOnly: true,
+  },
+  {
+    id: 'sa-oc-55-1',
+    ref: 'Shulchan Arukh, Orach Chayim 55:1',
+    heRef: 'שולחן ערוך, אורח חיים נ״ה:א׳',
+    simanSeifLabel: 'Oraj Jaim 55:1',
+    focusBranch: 'REZOS',
+    focusBranchLabel: 'Leyes de los Rezos',
+    topicLabel: 'Exigencia de Minyán de diez varones adultos para el recitado del Kadish',
+    briefHebrewQuote:
+      'אוֹמְרִים קַדִּישׁ, וְאֵין אוֹמְרִים אוֹתוֹ בְּפָחוֹת מֵעֲשָׂרָה זְכָרִים בְּנֵי חוֹרִין גְּדוֹלִים שֶׁהֵבִיאוּ שְׁתֵּי שְׂעָרוֹת.',
+    briefSpanishQuote:
+      '«Se recita el Kadish y no puede pronunciarse con menos de diez varones adultos judíos (Minyán), al igual que la Kedushá y Barejú, pues toda santificación pública exige congregación».',
+    fullEnglishSummary:
+      'Kaddish is recited only in the presence of a Minyan of ten adult free males, just like Kedushah and Barchu.',
+    mejaberAndRamaNote:
+      'Establece que el Kadish es una doxología comunitaria (Davar she-bi-Kedushá) y nunca un rezo privado solitario.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:kadish|kaddish|miny[aá]n|kedush[aá]|barej[uú]|diez|p[uú]blico|congregaci[oó]n|davar\s+shebikdush[aá])(?![a-záéíóúñ])/i,
+    defaultPriority: 96,
   },
   {
     id: 'sa-oc-61-1',
@@ -68,8 +90,8 @@ const SHULCHAN_ARUKH_CORPUS: ShulchanArukhCorpusEntry[] = [
       'One must recite the Shema with deliberate concentration, awe, and reverence, focusing the heart completely on accepting God’s sovereignty in the first verse.',
     mejaberAndRamaNote:
       'Aplica por igual a los ritos Sefardí y Ashkenazí; la kavaná del primer versículo es indispensable para cumplir la mitzvá.',
-    subtopicKeywords: /\b(shem[aá]|keriat\s+shem[aá]|kavan[aá]|concentraci[oó]n|atenci[oó]n|lectura)\b/i,
-    defaultPriority: 95,
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:shem[aá]|keriat\s+shem[aá]|kavan[aá]|concentraci[oó]n|atenci[oó]n|lectura)(?![a-záéíóúñ])/i,
+    defaultPriority: 88,
   },
   {
     id: 'sa-oc-68-1',
@@ -87,8 +109,8 @@ const SHULCHAN_ARUKH_CORPUS: ShulchanArukhCorpusEntry[] = [
       'Rema rules that one must never alter the custom of the place in any detail of the order of prayer or its liturgical wording (Nusach).',
     mejaberAndRamaNote:
       'El Ramá protege la continuidad de cada Núsaj (Sefarad, Ashkenaz, Ari, Teimán) frente a cambios arbitrarios.',
-    subtopicKeywords: /\b(n[uú]saj|nusjaot|minhag|sidur|siddur|piyutim|rito|orden\s+del\s+rezo|sefard[ií]|ashkenaz[ií])\b/i,
-    defaultPriority: 88,
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:n[uú]saj|nusjaot|minhag|sidur|siddur|piyutim|rito|orden\s+del\s+rezo|sefard[ií]|ashkenaz[ií])(?![a-záéíóúñ])/i,
+    defaultPriority: 85,
   },
   {
     id: 'sa-oc-90-9',
@@ -106,8 +128,48 @@ const SHULCHAN_ARUKH_CORPUS: ShulchanArukhCorpusEntry[] = [
       'A person should make every effort to pray in the synagogue together with the congregation (tzibur).',
     mejaberAndRamaNote:
       'Define la importancia halájica del Minyán y de la sinagoga como lugar consagrado al rezo.',
-    subtopicKeywords: /\b(miny[aá]n|tzibur|sinagoga|comunidad|p[uú]blico|congregaci[oó]n|kadish|kedush[aá])\b/i,
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:miny[aá]n|tzibur|sinagoga|comunidad|p[uú]blico|congregaci[oó]n|kadish|kaddish|kedush[aá])(?![a-záéíóúñ])/i,
     defaultPriority: 84,
+  },
+  {
+    id: 'sa-oc-95-1',
+    ref: 'Shulchan Arukh, Orach Chayim 95:1',
+    heRef: 'שולחן ערוך, אורח חיים צ״ה:א׳',
+    simanSeifLabel: 'Oraj Jaim 95:1',
+    focusBranch: 'REZOS',
+    focusBranchLabel: 'Leyes de los Rezos',
+    topicLabel: 'Postura en la Amidá: pies juntos como los ángeles (Ezequiel 1:7)',
+    briefHebrewQuote:
+      'צָרִיךְ שֶׁיְּכַוֵּן רַגְלָיו זֶה אֵצֶל זֶה בְּכַוָּנָה כְּאִלּוּ אֵינָן אֶלָּא רֶגֶל אַחַת, כְּדֵי לְהִדַּמּוֹת לַמַּלְאָכִים שֶׁנֶּאֱמַר: וְרַגְלֵיהֶם רֶגֶל יְשָׁרָה.',
+    briefSpanishQuote:
+      '«Al ponerse de pie en la Amidá debe juntar ambos pies como si fueran un solo pie, semejante a los ángeles de Ezequiel 1:7 ("Y sus pies eran un pie recto")».',
+    fullEnglishSummary:
+      'When standing for the Amidah, one must align both feet together as if they were a single foot, resembling the angels in Ezekiel 1:7.',
+    mejaberAndRamaNote:
+      'Basado en Berajot 10b: inmovilizar el desplazamiento corporal desliga el alma de la prisa profana para presentarse ante el Rey.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:postura|posturas|pies|juntos|pararse|cuerpo|reverencia|inclin(?:arse|amos|an|aci[oó]n|aciones)|amid[aá]|keri[aá]|ángeles|ezequiel)(?![a-záéíóúñ])/i,
+    defaultPriority: 74,
+    specializedOnly: true,
+  },
+  {
+    id: 'sa-oc-95-2',
+    ref: 'Shulchan Arukh, Orach Chayim 95:2',
+    heRef: 'שולחן ערוך, אורח חיים צ״ה:ב׳',
+    simanSeifLabel: 'Oraj Jaim 95:2',
+    focusBranch: 'REZOS',
+    focusBranchLabel: 'Leyes de los Rezos',
+    topicLabel: 'Cabeza inclinada, ojos abajo, corazón arriba y manos sobre el pecho como un siervo',
+    briefHebrewQuote:
+      'וְיָכוֹף רֹאשׁוֹ מְעַט וְעֵינָיו לְמַטָּה כְּנֶגֶד הָאָרֶץ וְלִבּוֹ לְמַעְלָה; וְיַנִּיחַ יָדָיו עַל לִבּוֹ כְּפוּתִין כְּעֶבֶד לִפְנֵי רַבּוֹ.',
+    briefSpanishQuote:
+      '«Inclinará levemente la cabeza con los ojos hacia abajo y el corazón elevado hacia lo Alto; y posará sus manos entrelazadas sobre el corazón como un siervo ante su Amo».',
+    fullEnglishSummary:
+      'One inclines the head slightly with eyes cast downward and heart turned heavenward, clasping the hands over the heart in awe like a servant before the King.',
+    mejaberAndRamaNote:
+      'Codifica Yevamot 105b y Shabat 10a (el ejemplo de Rava): la postura exterior moldeada en humildad educa y despierta la reverencia del corazón.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:postura|posturas|reverencia|reverencias|inclin(?:arse|amos|an|aci[oó]n|aciones)|cabeza|ojos|manos|siervo|mirada|keri[aá]|amid[aá])(?![a-záéíóúñ])/i,
+    defaultPriority: 74,
+    specializedOnly: true,
   },
   {
     id: 'sa-oc-98-1',
@@ -125,8 +187,68 @@ const SHULCHAN_ARUKH_CORPUS: ShulchanArukhCorpusEntry[] = [
       'One who prays the Amidah must direct his heart to the meaning of the words he utters with his lips and regard himself as standing before the Divine Presence.',
     mejaberAndRamaNote:
       'Codifica el núcleo espiritual y halájico de la Shemoné Esré para Shajarit, Minjá y Arvit.',
-    subtopicKeywords: /\b(amid[aá]|shemon[eé]\s+esr[eé]|dieciocho|kavan[aá]|rezar|rezo|rezos|tefil[aá]|minj[aá]|arvit|maariv|shajarit)\b/i,
-    defaultPriority: 98,
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:amid[aá]|shemon[eé]\s+esr[eé]|dieciocho|kavan[aá]|concentraci[oó]n)(?![a-záéíóúñ])/i,
+    defaultPriority: 90,
+  },
+  {
+    id: 'sa-oc-113-1',
+    ref: 'Shulchan Arukh, Orach Chayim 113:1',
+    heRef: 'שולחן ערוך, אורח חיים קי״ג:א׳',
+    simanSeifLabel: 'Oraj Jaim 113:1',
+    focusBranch: 'REZOS',
+    focusBranchLabel: 'Leyes de los Rezos',
+    topicLabel: 'Las cuatro inclinaciones obligatorias en la Amidá (Avot y Modim) y prohibición de añadir más',
+    briefHebrewQuote:
+      'אֵלּוּ הַבְּרָכוֹת שֶׁשּׁוֹחִין בָּהֶם: אָבוֹת תְּחִלָּה וָסוֹף, וְהוֹדָאָה תְּחִלָּה וָסוֹף; וְאִם בָּא לִשְׁחוֹת בְּסוֹף כָּל בְּרָכָה וּבְרָכָה מְלַמְּדִין אוֹתוֹ שֶׁלֹּא יִשְׁחֶה.',
+    briefSpanishQuote:
+      '«Estas son las bendiciones en las que se inclina: Avot (1.ª) al principio y al final, y Modim (18.ª) al principio y al final; y si alguien quiere inclinarse en cada bendición, se le instruye que no lo haga».',
+    fullEnglishSummary:
+      'These are the blessings in the Amidah where one bows: Avot at beginning and end, and Modim at beginning and end; one is taught not to add bows in other blessings.',
+    mejaberAndRamaNote:
+      'Basado en Berajot 34a: limitar la Keriá a exactamente 4 momentos evita que el gesto físico pierda solemnidad y se vuelva rutina mecánica.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:inclin(?:arse|amos|an|aci[oó]n|aciones)|reverencia|reverencias|hishtajavai[aá]|postraci[oó]n|arrodillarse|postura|avot|modim|keri[aá]|amid[aá])(?![a-záéíóúñ])/i,
+    defaultPriority: 74,
+    specializedOnly: true,
+  },
+  {
+    id: 'sa-oc-113-4',
+    ref: 'Shulchan Arukh, Orach Chayim 113:4',
+    heRef: 'שולחן ערוך, אורח חיים קי״ג:ד׳',
+    simanSeifLabel: 'Oraj Jaim 113:4',
+    focusBranch: 'REZOS',
+    focusBranchLabel: 'Leyes de los Rezos',
+    topicLabel: 'Forma exacta de la Keriá: doblar rodillas en "Baruj", torso en "Atá" y erguirse en "Hashem"',
+    briefHebrewQuote:
+      'כְּשֶׁהוּא כּוֹרֵעַ, כּוֹרֵעַ בְּ״בָּרוּךְ״ וְכֵן כְּשֶׁיָּזוֹקֵף יָזוֹקֵף בַּשֵּׁם; וְצָרִיךְ לִשְׁחוֹת עַד שֶׁיִּתְפַּקְּקוּ כָּל חֻלְיוֹת שֶׁבַּשִּׁדְרָה.',
+    briefSpanishQuote:
+      '«Al inclinarse, dobla las rodillas en "Baruj" y el torso en "Atá" hasta que se distiendan todas las vértebras de la columna, y al enderezarse lo hace al pronunciar "Hashem" ("El Eterno endereza a los encorvados", Salmos 146:8)».',
+    fullEnglishSummary:
+      'When bowing one bends the knees at Baruch, bows the spine deeply at Atah until all vertebrae protrude, and straightens up upon saying Hashem.',
+    mejaberAndRamaNote:
+      'Une Berajot 12a y Berajot 28b (las 18 vértebras y el hueso Luz): la reverencia ante Hashem no aplasta al hombre, sino que al pronunciar Su Nombre lo dignifica y levanta.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:inclin(?:arse|amos|an|aci[oó]n|aciones)|reverencia|reverencias|postura|posturas|hishtajavai[aá]|baruj|v[eé]rtebras|columna|rodillas|enderezarse|arrodillarse|keri[aá]|amid[aá])(?![a-záéíóúñ])/i,
+    defaultPriority: 74,
+    specializedOnly: true,
+  },
+  {
+    id: 'sa-oc-127-1',
+    ref: 'Shulchan Arukh, Orach Chayim 127:1',
+    heRef: 'שולחן ערוך, אורח חיים קכ״ז:א׳',
+    simanSeifLabel: 'Oraj Jaim 127:1',
+    focusBranch: 'REZOS',
+    focusBranchLabel: 'Leyes de los Rezos',
+    topicLabel: 'Inclinación personal e intransferible en Modim de-Rabanán durante la repetición',
+    briefHebrewQuote:
+      'כְּשֶׁמַּגִּיעַ שְׁלִיחַ צִבּוּר לְ״מוֹדִים״ וְהָעָם שׁוֹחִים עִמּוֹ, אוֹמְרִים ״מוֹדִים אֲנַחְנוּ לָךְ״ בְּשִׁיחָה.',
+    briefSpanishQuote:
+      '«Cuando el Jazán llega a Modim en la repetición de la Amidá, toda la congregación se inclina personalmente con él recitando "Modim de-Rabanán"».',
+    fullEnglishSummary:
+      'When the cantor reaches Modim during the repetition of the Amidah, the entire congregation bows together with him reciting Modim deRabanan.',
+    mejaberAndRamaNote:
+      'En Sotá 40a y los comentaristas: aunque el Jazán recita la Amidá por el público, nadie puede delegar en otro su propia inclinación de gratitud.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:modim|inclin(?:arse|amos|an|aci[oó]n|aciones)|reverencia|postura|jaz[aá]n)(?![a-záéíóúñ])/i,
+    defaultPriority: 73,
+    specializedOnly: true,
   },
   {
     id: 'sa-oc-158-1',
@@ -519,7 +641,85 @@ const SHULCHAN_ARUKH_CORPUS: ShulchanArukhCorpusEntry[] = [
     defaultPriority: 87,
   },
 
-  // ======================== 4. HALAJA GENERAL & MINHAG ========================
+  // ======================== 4. CICLO DE VIDA Y DUELO (AVELUT - YORÉ DEÁ) ========================
+  {
+    id: 'sa-yd-340-1',
+    ref: "Shulchan Arukh, Yoreh De'ah 340:1",
+    heRef: 'שולחן ערוך, יורה דעה ש״מ:א׳',
+    simanSeifLabel: 'Yoré Deá 340:1',
+    focusBranch: 'CICLO_DE_VIDA',
+    focusBranchLabel: 'Leyes del Duelo (Avelut)',
+    topicLabel: 'Obligación de la Keriá (desgarro de vestidura de pie) al comenzar el duelo',
+    briefHebrewQuote:
+      'מִי שֶׁמֵּת לוֹ מֵת וְהוּא מֵהַמֵּתִים שֶׁרָאוּי לְהִתְאַבֵּל עֲלֵיהֶם חַיָּב לִקְרוֹעַ עָלָיו, וְצָרִיךְ שֶׁיִּקְרַע מְעֻמָּד.',
+    briefSpanishQuote:
+      '«Aquel a quien le fallece uno de los siete parientes cercanos por los que corresponde guardar duelo está obligado a rasgar su vestidura (Keriá) y debe hacerlo puesto de pie antes de cerrar el féretro».',
+    fullEnglishSummary:
+      'One who suffers the loss of a close relative for whom mourning is observed is obligated to tear their garment (Keriah) while standing.',
+    mejaberAndRamaNote:
+      'El Mejaber exige realizar la Keriá de pie; el Ramá añade hacerlo preferentemente antes de sellar el rostro del difunto.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:avelut|duelo|luto|keri[aá]|rasgar|desgarro|vestidura|parientes|fallecimiento|aninut)(?![a-záéíóúñ])/i,
+    defaultPriority: 97,
+  },
+  {
+    id: 'sa-yd-376-4',
+    ref: "Shulchan Arukh, Yoreh De'ah 376:4",
+    heRef: 'שולחן ערוך, יורה דעה שע״ו:ד׳',
+    simanSeifLabel: 'Yoré Deá 376:4',
+    focusBranch: 'CICLO_DE_VIDA',
+    focusBranchLabel: 'Leyes del Duelo (Avelut)',
+    topicLabel: 'Recitado del Kadish Yatom durante once meses por padre o madre (Ramá)',
+    briefHebrewQuote:
+      'הַגָּה: וְנָהֲגוּ שֶׁאֵין אוֹמְרִים קַדִּישׁ וּתְפִלָּה רַק י״א חֳדָשִׁים כְּדֵי שֶׁלֹּא יַעֲשׂוּ אֲבִיהֶם וְאִמָּם רְשָׁעִים, כִּי מִשְׁפַּט רָשָׁע י״ב חֹדֶשׁ.',
+    briefSpanishQuote:
+      '«Es costumbre recitar el Kadish Yatom y dirigir la plegaria por padre o madre únicamente durante once meses (de los doce de duelo), para no presumir que los progenitores requirieran el juicio máximo de doce meses» (Ramá).',
+    fullEnglishSummary:
+      'Rema codifies the binding Ashkenazi and general custom to recite Mourner’s Kaddish for only eleven months so as not to imply a parent needed the full twelve-month judgment.',
+    mejaberAndRamaNote:
+      'El Mejaber detalla el Kadish tras el entierro; el Ramá codifica los 11 meses (y los poskim sefardíes como Yalkut Yosef intercalan una pausa en el mes 12).',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:kadish|kaddish|avelut|duelo|luto|once\s+meses|11\s+meses|doce\s+meses|padre|madre|yatom|ilui\s+nesham[aá]|entierro)(?![a-záéíóúñ])/i,
+    defaultPriority: 99,
+  },
+  {
+    id: 'sa-yd-380-1',
+    ref: "Shulchan Arukh, Yoreh De'ah 380:1",
+    heRef: 'שולחן ערוך, יורה דעה ש״פ:א׳',
+    simanSeifLabel: 'Yoré Deá 380:1',
+    focusBranch: 'CICLO_DE_VIDA',
+    focusBranchLabel: 'Leyes del Duelo (Avelut)',
+    topicLabel: 'Restricciones normativas del doliente en la Shivá (7 días) y Shloshim (30 días)',
+    briefHebrewQuote:
+      'אֵלּוּ דְּבָרִים שֶׁהָאָבֵל אָסוּר בָּהֶם: בִּמְלָאכָה, בִּרְחִיצָה, וְסִיכָה, וּנְעִילַת הַסַּנְדָּל... וְאָסוּר בְּתִסְפֹּרֶת וְשִׂמְחָה כָּל ל׳ יוֹם.',
+    briefSpanishQuote:
+      '«Durante los siete días de la Shivá el doliente se abstiene de trabajar, bañarse por placer, calzar cuero y estudiar Torá alegre; y durante los treinta días de Shloshim se abstiene de cortar su cabello y asistir a celebraciones».',
+    fullEnglishSummary:
+      'Enumerates the mourner’s prohibitions during the seven days of Shivah and thirty days of Shloshim.',
+    mejaberAndRamaNote:
+      'Ordena la transición gradual desde el luto estricto del hogar (Shivá) hacia la reintegración progresiva (Shloshim).',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:avelut|duelo|luto|shiv[aá]|shloshim|aninut|prohibiciones|calzado|consuelo)(?![a-záéíóúñ])/i,
+    defaultPriority: 95,
+  },
+  {
+    id: 'sa-yd-394-1',
+    ref: "Shulchan Arukh, Yoreh De'ah 394:1",
+    heRef: 'שולחן ערוך, יורה דעה שצ״ד:א׳',
+    simanSeifLabel: 'Yoré Deá 394:1',
+    focusBranch: 'CICLO_DE_VIDA',
+    focusBranchLabel: 'Leyes del Duelo (Avelut)',
+    topicLabel: 'Prohibición del duelo excesivo y medida compasiva (3, 7 y 30 días)',
+    briefHebrewQuote:
+      'אֵין מִתְקַשִּׁין עַל הַמֵּת יוֹתֵר מִדַּאי... אֶלָּא שְׁלֹשָׁה יָמִים לִבְכִי, שִׁבְעָה לְהֶסְפֵּד, שְׁלֹשִׁים לְתִסְפֹּרֶת וּלְגִהוּץ.',
+    briefSpanishQuote:
+      '«No se debe prolongar ni extremar el duelo más allá de la medida fijada por la Torá: tres días para el llanto profundo, siete para el elogio fúnebre y treinta para el arreglo personal».',
+    fullEnglishSummary:
+      'One must not mourn excessively beyond the Torah’s measure: three days for weeping, seven for eulogy/lament, thirty for haircut and pressed garments.',
+    mejaberAndRamaNote:
+      'Basado en Moed Katán 27b: la Halajá fija límites exactos al dolor para proteger el equilibrio emocional y espiritual del doliente.',
+    subtopicKeywords: /(?<![a-záéíóúñ])(?:avelut|duelo|luto|excesivo|llanto|shiv[aá]|shloshim|l[ií]mites|compasi[oó]n)(?![a-záéíóúñ])/i,
+    defaultPriority: 94,
+  },
+
+  // ======================== 5. HALAJA GENERAL & MINHAG ========================
   {
     id: 'sa-yd-214-1',
     ref: "Shulchan Arukh, Yoreh De'ah 214:1",
@@ -545,11 +745,32 @@ function detectConsultedBranches(
 ): HalakhicConsultationFocus[] {
   const branches: HalakhicConsultationFocus[] = [];
 
-  const hasRezosSignal =
-    validation.halakhicDomains.includes('LEYES_REZOS_Y_LITURGIA') ||
-    /(?<![a-záéíóúñ])(?:rezo|rezos|rezar|tefil[aá]|plegaria|oraci[oó]n|amid[aá]|shemon[eé]\s+esr[eé]|shem[aá]|beraj[aá]|berajot|bendici[oó]n|bendiciones|shajarit|minj[aá]|arvit|maariv|musaf|halel|n[uú]saj|sidur|miny[aá]n|netilat\s+yadayim|birkat)(?![a-záéíóúñ])/i.test(
+  const hasCicloVidaSignal =
+    validation.halakhicDomains.includes('CICLO_DE_VIDA_Y_HALAJA_PRACTICA') ||
+    /(?<![a-záéíóúñ])(?:avelut|duelo|luto|aninut|shiv[aá]h?|shloshim|yahrzeit|kadish|kaddish|ilui\s+nesham[aá]|entierro|sepelio|fallecimiento|difunt[oa]|brit\s+mil[aá]h?|pidi[oó]n|bar\s+mitzv[aá]h?|jup[aá]h?|mezuz[aá]h?|mikv[eé]h?)(?![a-záéíóúñ])/i.test(
       cleanQuery
     );
+
+  const hasMourningQuery =
+    /(?<![a-záéíóúñ])(?:avelut|duelo|luto|aninut|shiv[aá]h?|shloshim|yahrzeit|entierro|sepelio|fallecimiento|difunt[oa])(?![a-záéíóúñ])/i.test(
+      cleanQuery
+    );
+
+  const hasExplicitPrayerSubtopic =
+    /(?<![a-záéíóúñ])(?:amid[aá]|shemon[eé]\s+esr[eé]|shem[aá]|beraj[aá]|berajot|bendici[oó]n|bendiciones|shajarit|minj[aá]|arvit|maariv|musaf|halel|n[uú]saj|sidur|miny[aá]n|netilat\s+yadayim|birkat|postura|reverencia|inclinarse|inclinaci[oó]n|inclinaciones|hishtajavai[aá]|kid[aá]|postraci[oó]n|arrodillarse|kadish|kaddish)(?![a-záéíóúñ])/i.test(
+      cleanQuery
+    );
+
+  const hasGenericRezosWord =
+    /(?<![a-záéíóúñ])(?:rezo|rezos|rezar|tefil[aá]|plegaria|oraci[oó]n)(?![a-záéíóúñ])/i.test(
+      cleanQuery
+    );
+
+  const hasRezosSignal =
+    hasExplicitPrayerSubtopic ||
+    (!hasMourningQuery &&
+      (validation.halakhicDomains.includes('LEYES_REZOS_Y_LITURGIA') ||
+        hasGenericRezosWord));
 
   const hasFestividadesSignal =
     validation.halakhicDomains.includes('FESTIVIDADES_Y_SHABAT') ||
@@ -563,11 +784,12 @@ function detectConsultedBranches(
       cleanQuery
     );
 
+  if (hasCicloVidaSignal) branches.push('CICLO_DE_VIDA');
   if (hasRezosSignal) branches.push('REZOS');
   if (hasFestividadesSignal) branches.push('FESTIVIDADES');
   if (hasKashrutSignal) branches.push('KASHRUT');
 
-  // If the user explicitly invokes Halajá / Shulján Aruj without narrowing to one of the 3 pillars,
+  // If the user explicitly invokes Halajá / Shulján Aruj without narrowing to a pillar,
   // consult a balanced core across Rezos, Festividades, Kashrut & General Halajá.
   if (branches.length === 0 && validation.isPurelyHalakhic) {
     branches.push('REZOS', 'FESTIVIDADES', 'KASHRUT');
@@ -581,11 +803,31 @@ function selectShulchanArukhEntriesForQuery(
   branches: HalakhicConsultationFocus[],
   maxQuotes = 4
 ): ShulchanArukhCorpusEntry[] {
-  const candidates = SHULCHAN_ARUKH_CORPUS.filter(
-    (entry) =>
+  const isMourningQuery =
+    /(?<![a-záéíóúñ])(?:avelut|duelo|luto|aninut|shiv[aá]h?|shloshim|yahrzeit|entierro|sepelio|fallecimiento|difunt[oa])(?![a-záéíóúñ])/i.test(
+      cleanQuery
+    ) &&
+    !/(?<![a-záéíóúñ])(?:amid[aá]|inclin(?:arse|amos|an|aci[oó]n|aciones)|postura|pies\s+juntos|baruj|modim|avot)(?![a-záéíóúñ])/i.test(
+      cleanQuery
+    );
+
+  const candidates = SHULCHAN_ARUKH_CORPUS.filter((entry) => {
+    if (
+      isMourningQuery &&
+      (entry.id === 'sa-oc-1-1' ||
+        entry.id === 'sa-oc-95-1' ||
+        entry.id === 'sa-oc-95-2' ||
+        entry.id === 'sa-oc-113-1' ||
+        entry.id === 'sa-oc-113-4' ||
+        entry.id === 'sa-oc-127-1')
+    ) {
+      return false;
+    }
+    return (
       branches.includes(entry.focusBranch) ||
       (entry.focusBranch === 'HALAJA_GENERAL' && branches.length > 0)
-  );
+    );
+  });
 
   const scored = candidates.map((entry) => {
     const keywordMatches = entry.subtopicKeywords.test(cleanQuery) ? 45 : 0;
@@ -597,11 +839,25 @@ function selectShulchanArukhEntriesForQuery(
       : 0;
     return {
       entry,
+      keywordMatches,
+      refDirectHit,
       score: entry.defaultPriority + keywordMatches + isDirectBranch + refDirectHit,
     };
   });
 
   scored.sort((a, b) => b.score - a.score);
+
+  // Strict thematic relevance gate: when at least one Shulchan Arukh entry directly matches
+  // keywords/refs in the query, NEVER pad remaining slots with unrelated filler entries.
+  const matchedEntries = scored.filter(
+    (item) => item.keywordMatches > 0 || item.refDirectHit > 0
+  );
+  const pool =
+    matchedEntries.length > 0
+      ? matchedEntries
+      : scored.filter((item) => !item.entry.specializedOnly);
+
+  const effectivePool = pool.length > 0 ? pool : scored;
 
   const selected: ShulchanArukhCorpusEntry[] = [];
   const usedIds = new Set<string>();
@@ -609,7 +865,7 @@ function selectShulchanArukhEntriesForQuery(
   // Guarantee at least 1 top quote from each matched specialized branch first
   for (const branch of branches) {
     if (selected.length >= maxQuotes) break;
-    const topForBranch = scored.find(
+    const topForBranch = effectivePool.find(
       (item) => item.entry.focusBranch === branch && !usedIds.has(item.entry.id)
     );
     if (topForBranch) {
@@ -618,8 +874,8 @@ function selectShulchanArukhEntriesForQuery(
     }
   }
 
-  // Fill remaining slots by relevance score
-  for (const item of scored) {
+  // Fill remaining slots strictly from the relevant pool by score
+  for (const item of effectivePool) {
     if (selected.length >= maxQuotes) break;
     if (!usedIds.has(item.entry.id)) {
       selected.push(item.entry);

@@ -144,11 +144,6 @@ export async function googleSignIn(): Promise<{ user: User; accessToken: string 
   }
 }
 
-export async function signInWithGoogle(): Promise<User | null> {
-  const res = await googleSignIn();
-  return res?.user || null;
-}
-
 export async function getAccessToken(): Promise<string | null> {
   return cachedAccessToken;
 }

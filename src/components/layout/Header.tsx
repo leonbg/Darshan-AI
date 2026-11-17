@@ -12,16 +12,18 @@ import {
   Trash2,
   FileText,
   Search,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 import { User } from '../../services/firebase';
 import { ArchivedDerashaEntry } from '../../types';
 
-export type WorkspaceTab = 'estudio' | 'calendario' | 'archivo' | 'youtube' | 'todo';
+export type WorkspaceTab = 'estudio' | 'calendario' | 'archivo' | 'todo';
 
 interface HeaderProps {
   onOpenAboutModal: () => void;
   onOpenSettingsModal?: () => void;
-  onNavigateSection?: (target: 'study' | 'archive' | 'topics' | 'musar' | 'youtube') => void;
+  onNavigateSection?: (target: 'study' | 'archive' | 'topics' | 'musar') => void;
   archivedCount?: number;
   archivedEntries?: ArchivedDerashaEntry[];
   onOpenArchivedDerasha?: (entry: ArchivedDerashaEntry) => void;
@@ -37,6 +39,9 @@ interface HeaderProps {
   onSignInGoogle?: () => void;
   onSignOutGoogle?: () => void;
   onSyncDriveNow?: () => void;
+  homeResetSignal?: number;
+  isHomeTapArmed?: boolean;
+  onClearOrReturnHome?: () => void;
 }
 
 const HeaderComponent: React.FC<HeaderProps> = ({
@@ -58,6 +63,9 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   onSignInGoogle,
   onSignOutGoogle,
   onSyncDriveNow,
+  homeResetSignal = 0,
+  isHomeTapArmed = false,
+  onClearOrReturnHome,
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isHistoryMenuOpen, setIsHistoryMenuOpen] = useState(false);
@@ -83,6 +91,15 @@ const HeaderComponent: React.FC<HeaderProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isProfileMenuOpen, isHistoryMenuOpen]);
+
+  useEffect(() => {
+    if (homeResetSignal > 0) {
+      setIsHistoryMenuOpen(false);
+      setIsProfileMenuOpen(false);
+      setHistorySearch('');
+      setConfirmDeleteSeq(null);
+    }
+  }, [homeResetSignal]);
 
   const filteredHistoryEntries = useMemo(() => {
     const q = historySearch.trim().toLowerCase();
@@ -172,21 +189,40 @@ const HeaderComponent: React.FC<HeaderProps> = ({
           >
             Musar Diario
           </button>
-          <button
-            type="button"
-            onClick={() => onNavigateSection?.('youtube')}
-            className={`whitespace-nowrap shrink-0 transition-colors cursor-pointer py-1 border-b-2 ${
-              activeWorkspace === 'youtube'
-                ? 'text-rose-300 border-rose-400 font-semibold'
-                : 'border-transparent hover:text-white'
-            }`}
-          >
-            Video → Visuales
-          </button>
         </nav>
 
-        {/* Zone 3: Primary Actions (Historial Icon + Guía Pardés + Gear Settings + Discreet Google Profile Icon) */}
+        {/* Zone 3: Primary Actions (Limpiar / Inicio + Historial Icon + Guía Pardés + Gear Settings + Google Profile Icon) */}
         <div className="flex items-center gap-2 shrink-0">
+          {onClearOrReturnHome && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsHistoryMenuOpen(false);
+                setIsProfileMenuOpen(false);
+                onClearOrReturnHome();
+              }}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer select-none ${
+                isHomeTapArmed
+                  ? 'bg-amber-400 border-amber-300 text-slate-950 shadow-sm'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-600/80 hover:border-sky-400/60'
+              }`}
+              title="1 toque: limpiar recuadro de consulta · 2 toques: volver al inicio de la aplicación (cierra historial o cualquier sección)"
+              aria-label="Limpiar consulta o tocar dos veces para volver al inicio"
+            >
+              {isHomeTapArmed ? (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                  <span>2º toque: Inicio</span>
+                </>
+              ) : (
+                <>
+                  <X className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span>Limpiar</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Small, Recognizable History Button with Clock-Rewind Graphic & Quick History Popover */}
           <div className="relative" ref={historyMenuRef}>
             <button

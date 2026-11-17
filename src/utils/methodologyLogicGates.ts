@@ -752,7 +752,8 @@ export function resolvePipelineMethodology(
   const evaluation = evaluateMethodologyLogicGates(query);
   const isComparativeQuery =
     Boolean(evaluation.externalThinkerDetection?.detected) ||
-    evaluation.gateId === 'GATE_3_PHILOSOPHICAL_CONTRAST';
+    evaluation.gateId === 'GATE_3_PHILOSOPHICAL_CONTRAST' ||
+    requestedMethodology === 'FILOSOFIA_CONTRASTIVA';
 
   const allowComparative =
     !evaluation.halakhicValidation?.externalPhilosophyInjectionDisabled && isComparativeQuery;

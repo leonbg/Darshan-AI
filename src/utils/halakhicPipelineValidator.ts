@@ -15,7 +15,9 @@ const HALAKHIC_DOMAIN_GROUPS: HalakhicDomainPatternGroup[] = [
       'Shulchan Arukh, Orach Chayim 1:1',
       'Shulchan Arukh, Orach Chayim 61:1',
       'Shulchan Arukh, Orach Chayim 68:1',
+      'Shulchan Arukh, Orach Chayim 95:1',
       'Shulchan Arukh, Orach Chayim 98:1',
+      'Shulchan Arukh, Orach Chayim 113:1',
       'Shulchan Arukh, Orach Chayim 422:2',
     ],
     patterns: [
@@ -30,9 +32,14 @@ const HALAKHIC_DOMAIN_GROUPS: HalakhicDomainPatternGroup[] = [
           /(?<![a-záéíóúñ])(?:tefil[aá]h?|tefilot|leyes?\s+de\s+(?:los\s+)?rezos?|rezos?\s+jud[ií]os?|rezos?|rezo|rezar|plegarias?|oraciones?|shajarit|minj[aá]h?|arvit|maariv|musaf|neil[aá]h?)(?![a-záéíóúñ])/i,
       },
       {
+        termLabel: 'Postura Corporal, Reverencia e Inclinaciones (Keriá / Hishtajavaiá)',
+        regex:
+          /(?<![a-záéíóúñ])(?:posturas?|reverencias?|inclinarse|inclinaci[oó]n|inclinaciones|arrodillarse|postrarse|postraci[oó]n|hishtajavai[aá]h?|kid[aá]h?|nefilat\s+apayim|pies\s+juntos|v[eé]rtebras|hueso\s+luz)(?![a-záéíóúñ])/i,
+      },
+      {
         termLabel: 'Amidá / Shemá / Bendiciones / Netilat Yadayim',
         regex:
-          /(?<![a-záéíóúñ])(?:amid[aá]h?|shemon[eé]\s+esr[eé]|dieciocho\s+bendiciones|beraj[aá]h?|berajot|bendici[oó]n|bendiciones|birkat\s+hamaz[oó]n|birkat\s+kohanim|bendici[oó]n\s+sacerdotal|ashrei|pesukei\s+de[- ]?zimr[aá]|tachan[uú]n|tajan[uú]n|selijot|kadish|kedush[aá]h?|modim|alenu|aleinu|netilat\s+yadayim|lavado\s+de\s+manos|hamotz[ií])(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:amid[aá]h?|shemon[eé]\s+esr[eé]|dieciocho\s+bendiciones|beraj[aá]h?|berajot|bendici[oó]n|bendiciones|birkat\s+hamaz[oó]n|birkat\s+kohanim|bendici[oó]n\s+sacerdotal|ashrei|pesukei\s+de[- ]?zimr[aá]|tachan[uú]n|tajan[uú]n|selijot|kadish|kaddish|kedush[aá]h?|modim|alenu|aleinu|netilat\s+yadayim|lavado\s+de\s+manos|hamotz[ií])(?![a-záéíóúñ])/i,
       },
       {
         termLabel: 'Shemá / Tefilín / Tzitzit / Talit / Minyán',
@@ -127,17 +134,25 @@ const HALAKHIC_DOMAIN_GROUPS: HalakhicDomainPatternGroup[] = [
   },
   {
     category: 'CICLO_DE_VIDA_Y_HALAJA_PRACTICA',
-    label: 'Ciclo de Vida, Pureza Familiar y Halajá Práctica (Even HaEzer y Joshen Mishpat)',
+    label: 'Ciclo de Vida, Duelo (Avelut) y Halajá Práctica (Yoré Deá, Even HaEzer y Joshen Mishpat)',
     recommendedSources: [
+      "Shulchan Arukh, Yoreh De'ah 340:1",
+      "Shulchan Arukh, Yoreh De'ah 376:4",
+      "Shulchan Arukh, Yoreh De'ah 380:1",
+      "Shulchan Arukh, Yoreh De'ah 394:1",
+      'Shulchan Arukh, Orach Chayim 55:1',
       'Shulchan Arukh, Even HaEzer 61:1',
-      "Shulchan Arukh, Yoreh De'ah 285:1",
-      'Shulchan Arukh, Choshen Mishpat 359:1',
     ],
     patterns: [
       {
-        termLabel: 'Ciclo de Vida / Mezuzá / Brit Milá / Matrimonio / Duelo',
+        termLabel: 'Duelo (Avelut) / Keriá / Shivá / Shloshim / Kadish Yatom',
         regex:
-          /(?<![a-záéíóúñ])(?:brit\s+mil[aá]h?|pidi[oó]n\s+ha[- ]?b[eé]n|bar\s+mitzv[aá]h?|bat\s+mitzv[aá]h?|jup[aá]h?|kidush[ií]n|ketub[aá]h?|guet|yibum|jalitz[aá]h?|taharat\s+ha[- ]?mishpaj[aá]|nid[aá]h?|mikv[eé]h?|mezuz[aá]h?|avelut|aninut|shiv[aá]h?|shloshim|yahrzeit| shatnez|ribit|heter\s+isk[aá]|maaser\s+kesafim)(?![a-záéíóúñ])/i,
+          /(?<![a-záéíóúñ])(?:avelut|aninut|shiv[aá]h?|shloshim|yahrzeit|duelo|luto|kadish|kaddish|ilui\s+nesham[aá]|day[aá]n\s+haemet|sepelio|entierro|fallecimiento|difunt[oa]|on[eé]n)(?![a-záéíóúñ])/i,
+      },
+      {
+        termLabel: 'Ciclo de Vida / Mezuzá / Brit Milá / Matrimonio / Tzedaká',
+        regex:
+          /(?<![a-záéíóúñ])(?:brit\s+mil[aá]h?|pidi[oó]n\s+ha[- ]?b[eé]n|bar\s+mitzv[aá]h?|bat\s+mitzv[aá]h?|jup[aá]h?|kidush[ií]n|ketub[aá]h?|guet|yibum|jalitz[aá]h?|taharat\s+ha[- ]?mishpaj[aá]|nid[aá]h?|mikv[eé]h?|mezuz[aá]h?|shatnez|ribit|heter\s+isk[aá]|maaser\s+kesafim|tzedak[aá]h?)(?![a-záéíóúñ])/i,
       },
     ],
   },
@@ -180,6 +195,14 @@ export function validatePurelyHalakhicQuery(rawQuery: string): HalakhicPipelineV
   const matchedTerms: string[] = [];
   const recommendedSources: string[] = [];
 
+  const isMourningTopic =
+    /(?<![a-záéíóúñ])(?:avelut|aninut|shiv[aá]h?|shloshim|yahrzeit|duelo|luto|ilui\s+nesham[aá]|day[aá]n\s+haemet|sepelio|entierro|fallecimiento|difunt[oa]|on[eé]n)(?![a-záéíóúñ])/i.test(
+      clean
+    ) &&
+    !/(?<![a-záéíóúñ])(?:amid[aá]|inclin(?:arse|amos|an|aci[oó]n|aciones)|postura|pies\s+juntos|baruj|modim|avot)(?![a-záéíóúñ])/i.test(
+      clean
+    );
+
   for (const group of HALAKHIC_DOMAIN_GROUPS) {
     let groupMatched = false;
     for (const p of group.patterns) {
@@ -193,17 +216,33 @@ export function validatePurelyHalakhicQuery(rawQuery: string): HalakhicPipelineV
     if (groupMatched) {
       matchedDomains.push(group.category);
       matchedDomainLabels.push(group.label);
-      for (const src of group.recommendedSources) {
-        if (!recommendedSources.includes(src)) {
-          recommendedSources.push(src);
+      if (!isMourningTopic || group.category === 'CICLO_DE_VIDA_Y_HALAJA_PRACTICA') {
+        for (const src of group.recommendedSources) {
+          if (!recommendedSources.includes(src)) {
+            recommendedSources.push(src);
+          }
         }
+      }
+    }
+  }
+
+  if (isMourningTopic) {
+    const mourningPrioritySources = [
+      "Shulchan Arukh, Yoreh De'ah 340:1",
+      "Shulchan Arukh, Yoreh De'ah 376:4",
+      "Shulchan Arukh, Yoreh De'ah 380:1",
+      "Shulchan Arukh, Yoreh De'ah 394:1",
+      'Shulchan Arukh, Orach Chayim 55:1',
+    ];
+    for (const src of mourningPrioritySources) {
+      if (!recommendedSources.includes(src)) {
+        recommendedSources.push(src);
       }
     }
   }
 
   const isPurelyHalakhic =
     matchedDomains.length > 0 && !hasExplicitExternalPhilosopherOrReligion;
-  const externalPhilosophyInjectionDisabled = isPurelyHalakhic;
 
   if (!isPurelyHalakhic) {
     return {
@@ -221,11 +260,19 @@ export function validatePurelyHalakhicQuery(rawQuery: string): HalakhicPipelineV
 
   const validatorSummary = `Validador Halájico del Pipeline Activo: Consulta identificada como de carácter puramente halájico (${matchedDomainLabels.join(' · ')}). Se ha omitido toda inyección de filosofía externa o comparativa, restringiendo el análisis al canon judío interno (Tanaj, Mishná, Talmud, Rambam, Shulján Aruj, Mejaber, Ramá, Minhag y Núsaj).`;
 
+  const isRoshChodeshOrHallelQuery =
+    /(?<![a-záéíóúñ])(?:halel|hallel|jats[ií]\s+halel|rosh\s+j[oó]desh|rosh\s+chodesh|j[oó]desh\s+mal[eé]|j[oó]desh\s+jaser|mes\s+que\s+termina)(?![a-záéíóúñ])/i.test(
+      clean
+    );
+
   const systemPromptGuard = `\n\n[VALIDADOR HALÁJICO DEL PIPELINE ACTIVO — INYECCIÓN DE CITAS FILOSÓFICAS EXTERNAS DESACTIVADA]:
 - El validador del pipeline determinó que esta consulta es de carácter PURAMENTE HALÁJICO / LITÚRGICO INTERNO (${matchedDomainLabels.join('; ')} — Términos detectados: ${matchedTerms.join(', ')}).
 - QUEDA ESTRICTAMENTE DESACTIVADA Y PROHIBIDA la inyección de citas filosóficas externas o de religiones comparadas: NO menciones ni cites a Immanuel Kant, el Imperativo Categórico, Platón, la Alegoría de la Caverna, Cicerón, Aristóteles, Sócrates, el Estoicismo, Spinoza, Nietzsche, el Budismo, el Nirvana ni el Valhalla.
-- Fundamenta el estudio al 100% en las fuentes internas del judaísmo: Torá, Talmud Bavli y Yerushalmi, Mishné Torá de Maimónides, el Shulján Aruj (Rabí Yosef Karo / Mejaber y las glosas del Ramá), Mishná Berurá, Ben Ish Jai y las diferencias internas de Minhag y Núsaj.
-- REGLA HALÁJICA Y CALENDÁRICA OBLIGATORIA SOBRE ROSH JÓDESH Y EL HALEL: Siempre que el tema involucre Rosh Jódesh o el Halel, DEBES explicar explícitamente por qué **Rosh Jódesh puede ser de 1 o de 2 días dependiendo de cuántos días tiene el mes que termina** (ciclo lunar de ~29 días y medio en *Talmud Rosh Hashaná 19b*, *Arjín 8b–9b*, *Rambam Hiljot Kidush HaJódesh 8:4–5* y *Shulján Aruj, Oraj Jaim 422 y 427:1*): (1) Si el mes que termina es **Jódesh Jaser (חֹדֶשׁ חָסֵר, mes deficiente de 29 días)**, Rosh Jódesh dura **1 solo día** (el día 1 del mes nuevo); (2) Si el mes que termina es **Jódesh Malé (חֹדֶשׁ מָלֵא, mes pleno de 30 días)**, Rosh Jódesh dura **2 días**: el **primer día de Rosh Jódesh es el día 30 del mes que termina (mes saliente)** y el **segundo día de Rosh Jódesh es el día 1 del nuevo mes entrante** (a partir del cual se cuentan los días del nuevo mes), recitándose en **ambos días** el Medio Halel (*Jatsi Halel*), *Yaalé VeYavó*, lectura de la Torá y *Musaf*.`;
+- Fundamenta el estudio al 100% en las fuentes internas del judaísmo: Torá, Talmud Bavli y Yerushalmi, Mishné Torá de Maimónides, el Shulján Aruj (Rabí Yosef Karo / Mejaber y las glosas del Ramá), Mishná Berurá, Ben Ish Jai y las diferencias internas de Minhag y Núsaj.${
+    isRoshChodeshOrHallelQuery
+      ? `\n- REGLA HALÁJICA Y CALENDÁRICA OBLIGATORIA SOBRE ROSH JÓDESH Y EL HALEL: Siempre que el tema involucre Rosh Jódesh o el Halel, DEBES explicar explícitamente por qué **Rosh Jódesh puede ser de 1 o de 2 días dependiendo de cuántos días tiene el mes que termina** (ciclo lunar de ~29 días y medio en *Talmud Rosh Hashaná 19b*, *Arjín 8b–9b*, *Rambam Hiljot Kidush HaJódesh 8:4–5* y *Shulján Aruj, Oraj Jaim 422 y 427:1*): (1) Si el mes que termina es **Jódesh Jaser (חֹדֶשׁ חָסֵר, mes deficiente de 29 días)**, Rosh Jódesh dura **1 solo día** (el día 1 del mes nuevo); (2) Si el mes que termina es **Jódesh Malé (חֹדֶשׁ מָלֵא, mes pleno de 30 días)**, Rosh Jódesh dura **2 días**: el **primer día de Rosh Jódesh es el día 30 del mes que termina (mes saliente)** y el **segundo día de Rosh Jódesh es el día 1 del nuevo mes entrante** (a partir del cual se cuentan los días del nuevo mes), recitándose en **ambos días** el Medio Halel (*Jatsi Halel*), *Yaalé VeYavó*, lectura de la Torá y *Musaf*.`
+      : ''
+  }`;
 
   return {
     isPurelyHalakhic: true,

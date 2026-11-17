@@ -6,9 +6,7 @@ import {
   RefreshCw,
   ArrowRight,
   Edit3,
-  Cpu,
 } from 'lucide-react';
-import { evaluateMethodologyLogicGates } from '../../utils/methodologyLogicGates';
 import { distillTopicEssence } from '../../utils/topicEssence';
 
 export interface ClarificationState {
@@ -16,6 +14,8 @@ export interface ClarificationState {
   originalQuery: string;
   reason: string;
   suggestedRefinements: string[];
+  activeStudyTitle?: string;
+  activeStudyQuery?: string;
 }
 
 interface QueryClarificationNoticeProps {
@@ -25,9 +25,19 @@ interface QueryClarificationNoticeProps {
   onDismissAndEdit: () => void;
 }
 
-export function buildRefinementsForQuery(rawQuery: string): string[] {
-  const cleaned = distillTopicEssence(rawQuery);
-  const lower = (rawQuery || '').trim().toLowerCase();
+export function buildRefinementsForQuery(
+  rawQuery: string,
+  activeStudyContext?: { title?: string; query?: string }
+): string[] {
+  const anchorRaw =
+    activeStudyContext?.query || activeStudyContext?.title
+      ? `${rawQuery || ''} ${activeStudyContext.title || ''} ${activeStudyContext.query || ''}`.trim()
+      : rawQuery || '';
+  const cleaned = distillTopicEssence(
+    rawQuery || activeStudyContext?.query || '',
+    activeStudyContext?.title
+  );
+  const lower = anchorRaw.toLowerCase();
 
   // 1. Rosh Jódesh (1 o 2 días) & Halel
   if (
@@ -261,7 +271,70 @@ export function buildRefinementsForQuery(rawQuery: string): string[] {
     ];
   }
 
-  const topicLabel = cleaned.length > 0 && cleaned.length <= 60 ? cleaned : 'este concepto';
+  // 11b. Gratitud, Modé Aní, Hakarat HaTov, Todá y Hodaiá
+  if (
+    lower.includes('gratitud') ||
+    lower.includes('hakarat') ||
+    lower.includes('mode ani') ||
+    lower.includes('modé aní') ||
+    lower.includes('agradec') ||
+    lower.includes('hodaia') ||
+    lower.includes('hodaiá') ||
+    lower.includes('toda ') ||
+    lower.includes('todá') ||
+    lower.includes('letoda') ||
+    lower.includes('letodá') ||
+    lower.includes('elohai neshama') ||
+    lower.includes('elohai neshamá')
+  ) {
+    return [
+      '¿Por qué el día judío comienza agradeciendo con Modé Aní antes de Netilat Yadaim (Shulján Aruj Oraj Jaim 1 y 4; Kitzur 1:2) y cómo se vincula con Elohai Neshamá (Berajot 60b)?',
+      'Hakarat HaTov («reconocer el bien») en la Torá, Rashi sobre Moshé y el Nilo/polvo (Éxodo 7:19; 8:12) y el Talmud en Berajot 35a («quien disfruta del mundo sin berajá es como si robara»)',
+      'Evolución del concepto de Gratitud (Hodaiá / Modim / Hakarat HaTov) en las 4 visiones: 1. Torá y Jazal · 2. Árbol de la Vida (Sefirá de Hod en la Cábala) · 3. Musar (Jovot HaLevavot Shaar HaBejiná) · 4. Jasidut (Breslev y Tania)',
+      'Cómo superar el piloto automático y la ingratitud (Kefuy Tová) en lo cotidiano según el Musar Transformativo de Rabí Israel Salanter y el Koaj HaNetiná de Rav Eliahu Dessler',
+    ];
+  }
+
+  // 11c. Postura corporal, Keriá, Hishtajavaiá y Reverencia en la Plegaria
+  const isMourningClarification =
+    lower.includes('avelut') ||
+    lower.includes('duelo') ||
+    lower.includes('luto') ||
+    lower.includes('kadish') ||
+    lower.includes('shiva') ||
+    lower.includes('shivá') ||
+    lower.includes('shloshim');
+  if (
+    !isMourningClarification &&
+    (lower.includes('postura') ||
+      lower.includes('reverencia') ||
+      lower.includes('inclinarse') ||
+      lower.includes('inclinaci') ||
+      lower.includes('keria') ||
+      lower.includes('keriá') ||
+      lower.includes('hishtajav') ||
+      lower.includes('postrarse'))
+  ) {
+    return [
+      '¿Cuáles son las leyes exactas de postura y las 4 inclinaciones de la Amidá en el Shulján Aruj (Oraj Jaim 95:1–2, 113:1–4 y 127:1) y Berajot 10b, 12a y 34a?',
+      '¿Qué simbolizan las 18 vértebras de la columna, el hueso Luz (Berajot 28b) y la secuencia «Baruj–Atá–Hashem» (Salmos 146:8) en la teología corporal de la Tefilá?',
+      'Diferencia halájica y filológica entre Keriá (arrodillarse/inclinarse), Kidá e Hishtajavaiá (Berajot 34b; Megilá 22b; Oraj Jaim 131:8)',
+      '¿Por qué el cuerpo educa al corazón («Ajarei hapeulot nimshajim halevavot», Sefer HaJínuj 16 y Kuzari 3:5) y qué enseña Modim de-Rabanán (Sotá 40a)?',
+    ];
+  }
+
+  const fallbackAnchor =
+    activeStudyContext?.title || activeStudyContext?.query
+      ? distillTopicEssence(activeStudyContext.query || '', activeStudyContext.title)
+      : '';
+  const candidateLabel =
+    cleaned && !/^(?:Estudio Exegético de la Tradición|Estudio de la Torá)$/i.test(cleaned)
+      ? cleaned
+      : fallbackAnchor || (rawQuery || '').trim();
+  const topicLabel =
+    candidateLabel.length > 85
+      ? `${candidateLabel.slice(0, 82).replace(/\s+\S*$/, '').trim()}…`
+      : candidateLabel || 'la enseñanza de la Torá consultada';
 
   return [
     `Análisis exegético en los 4 niveles del PARDÉS (Pshat, Rémez, Drash y Sod) sobre «${topicLabel}» en el Tanaj, Rashi, el Talmud y el Zóhar`,
@@ -279,10 +352,6 @@ export const QueryClarificationNotice: React.FC<QueryClarificationNoticeProps> =
 }) => {
   const [customRefinement, setCustomRefinement] = React.useState(state.originalQuery || '');
   const isTimeout = state.mode === 'timeout_unavailable';
-  const currentGate = React.useMemo(
-    () => evaluateMethodologyLogicGates(state.originalQuery || ''),
-    [state.originalQuery]
-  );
 
   React.useEffect(() => {
     setCustomRefinement(state.originalQuery || '');
@@ -316,32 +385,24 @@ export const QueryClarificationNotice: React.FC<QueryClarificationNoticeProps> =
           </div>
 
           <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base sm:text-lg font-bold text-white">
-                {isTimeout
-                  ? 'No hay respuestas disponibles de momento (Espera muy larga)'
-                  : 'Acotar o precisar la consulta para profundizar el estudio'}
-              </h3>
-              <span
-                className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
-                  isTimeout
-                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                    : 'bg-sky-500/15 border-sky-500/30 text-sky-300'
-                }`}
-              >
-                {isTimeout ? 'Tiempo límite alcanzado' : 'Acotaciones y Puertas Lógicas'}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300">
-                <Cpu className="w-3 h-3 text-sky-400" />
-                <span>
-                  Puerta #{currentGate.gateNumber}: {currentGate.enforcedMethodology}
-                </span>
-              </span>
-            </div>
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              {isTimeout
+                ? 'La consulta superó el tiempo de espera'
+                : 'Acotar o precisar la consulta'}
+            </h3>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               {state.reason}
             </p>
+            {state.activeStudyTitle && (
+              <div className="mt-1.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-xs text-emerald-200">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                <span>
+                  Acotando sobre:{' '}
+                  <strong className="text-white">{state.activeStudyTitle}</strong>
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -352,14 +413,20 @@ export const QueryClarificationNotice: React.FC<QueryClarificationNoticeProps> =
         className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2"
       >
         <label className="block text-xs font-bold text-sky-200">
-          Escribe o ajusta aquí mismo cómo deseas acotar o continuar tu estudio:
+          {state.activeStudyTitle
+            ? `Escribe qué aspecto de «${state.activeStudyTitle}» deseas acotar o ampliar:`
+            : 'Ajusta aquí cómo deseas acotar o continuar tu estudio:'}
         </label>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={customRefinement}
             onChange={(e) => setCustomRefinement(e.target.value)}
-            placeholder="Escribe aquí tu pregunta acotada o el punto que deseas profundizar..."
+            placeholder={
+              state.activeStudyTitle
+                ? `Ej.: Profundizar en las fuentes del Talmud, el Musar o la Cábala sobre ${state.activeStudyTitle}...`
+                : 'Escribe aquí tu pregunta acotada o el punto que deseas profundizar...'
+            }
             className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 focus:border-sky-400 text-xs sm:text-sm text-white placeholder-slate-500 outline-none"
           />
           <button
@@ -367,56 +434,36 @@ export const QueryClarificationNotice: React.FC<QueryClarificationNoticeProps> =
             disabled={!customRefinement.trim()}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-400 hover:bg-sky-300 text-slate-950 text-xs font-bold transition cursor-pointer disabled:opacity-50 shrink-0"
           >
-            <span>Continuar Estudio con Esta Pregunta</span>
+            <span>Continuar Estudio</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </form>
 
-      {/* Concrete Suggested Clarifications with Logic Gate Indicator */}
-      <div className="space-y-2.5 pt-1">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+      {/* Concrete Suggested Clarifications */}
+      <div className="space-y-2 pt-1">
+        <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>
-            O selecciona directamente una acotación sugerida (con su Puerta Lógica y metodología):
-          </span>
+          <span>O selecciona una formulación sugerida:</span>
         </span>
 
         <div className="grid grid-cols-1 gap-2">
-          {state.suggestedRefinements.map((refinement, idx) => {
-            const optionGate = evaluateMethodologyLogicGates(refinement);
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => onSelectRefinement(refinement)}
-                className="group text-left p-3.5 rounded-xl bg-slate-900/85 hover:bg-slate-900 border border-slate-800 hover:border-sky-400/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
-              >
-                <div className="space-y-1.5 flex-1">
-                  <span className="text-xs sm:text-sm text-slate-200 group-hover:text-white leading-relaxed block">
-                    {refinement}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-[10px] font-mono text-amber-300">
-                      <Cpu className="w-3 h-3 text-sky-400" />
-                      <span>
-                        Puerta #{optionGate.gateNumber} · {optionGate.enforcedMethodology}
-                      </span>
-                    </span>
-                    {optionGate.halakhicValidation?.isPurelyHalakhic && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-mono text-emerald-300">
-                        Validador Halájico Activo
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-sky-400 group-hover:translate-x-0.5 transition-transform">
-                  <span>Consultar</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </button>
-            );
-          })}
+          {state.suggestedRefinements.map((refinement, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => onSelectRefinement(refinement)}
+              className="group text-left p-3 rounded-xl bg-slate-900/85 hover:bg-slate-900 border border-slate-800 hover:border-sky-400/50 transition-all flex items-center justify-between gap-3 cursor-pointer"
+            >
+              <span className="text-xs sm:text-sm text-slate-200 group-hover:text-white leading-relaxed flex-1">
+                {refinement}
+              </span>
+              <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-sky-400 group-hover:translate-x-0.5 transition-transform">
+                <span>Consultar</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 

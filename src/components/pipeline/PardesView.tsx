@@ -205,52 +205,6 @@ export function buildPardesBlockShareText(
   return lines.join('\n');
 }
 
-/**
- * Generates a compact version of the methodology cards guaranteed to stay under
- * strict mobile OS Web Share intent character limits (~1,300 chars) so all
- * sections + Practical Conclusion arrive intact on WhatsApp/Telegram.
- */
-export function buildPardesCompactShareText(
-  derasha: FinalDerasha,
-  query?: string,
-  phase1?: Phase1AnalysisResult | null
-): string {
-  const lines: string[] = [];
-  const meta = getMethodologyHeaderMeta(derasha.metodologia);
-  const title = derasha.derashaTitle || phase1?.title || query || meta.title;
-
-  lines.push(`*DRASHÁ (${meta.code} · ${meta.hebrewStamp}): ${title}*`);
-  if (phase1?.primaryHebrew) {
-    lines.push(`${phase1.primaryHebrew} — «${phase1.literalSpanishTranslation || ''}»`);
-  }
-  lines.push('');
-
-  const trimParagraph = (text: string, maxLen = 210) => {
-    const clean = (text || '').replace(/\s+/g, ' ').trim();
-    if (clean.length <= maxLen) return clean;
-    const cut = clean.slice(0, maxLen);
-    const lastPeriod = cut.lastIndexOf('.');
-    if (lastPeriod > 95) return cut.slice(0, lastPeriod + 1);
-    const lastSpace = cut.lastIndexOf(' ');
-    return (lastSpace > 80 ? cut.slice(0, lastSpace) : cut) + '…';
-  };
-
-  const sections = resolveActiveSections(derasha);
-
-  sections.forEach((sec) => {
-    lines.push(`*[${sec.hebrewBadge} ${sec.hebrewTerm}] ${sec.spanishSubtitle}:* ${sec.title}`);
-    lines.push(`${trimParagraph(sec.exposition, 200)}`);
-    lines.push(`→ *Clave:* ${sec.keyTakeaway.trim()}`);
-    lines.push('');
-  });
-
-  if (derasha.practicalConclusion) {
-    lines.push(`*Llamada a la Acción:* ${derasha.practicalConclusion.dailyAction.trim()}`);
-  }
-
-  return lines.join('\n');
-}
-
 export function buildPardesPrintableHtml(
   derasha: FinalDerasha,
   query?: string,
