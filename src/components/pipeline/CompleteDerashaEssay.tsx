@@ -48,6 +48,7 @@ import {
   summarizeOutputPreferencesEs,
 } from '../../utils/outputPreferences';
 import { OutputCustomizationControls } from './OutputCustomizationControls';
+import { BidiText } from '../../utils/bidiText';
 import {
   getMethodologyMeta,
   METHODOLOGY_DISPLAY_LIST,
@@ -634,9 +635,12 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
               <Sparkles className="w-3.5 h-3.5" />
               <span>Exordio y Planteamiento Central</span>
             </div>
-            <p className="font-editorial text-lg sm:text-xl text-slate-100 leading-relaxed italic whitespace-pre-line">
-              {derasha.openingExordium}
-            </p>
+            <BidiText
+              as="div"
+              paragraphs
+              text={derasha.openingExordium}
+              className="font-editorial text-lg sm:text-xl text-slate-100 leading-relaxed italic space-y-3"
+            />
           </div>
         )}
       </div>
@@ -698,21 +702,24 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
               </div>
 
               {/* Prose Content */}
-              <div className="font-editorial text-base sm:text-[1.15rem] text-slate-200 leading-[1.8] space-y-4 whitespace-pre-line">
-                {sec.content}
-              </div>
+              <BidiText
+                as="div"
+                paragraphs
+                text={sec.content}
+                className="font-editorial text-base sm:text-[1.15rem] text-slate-200 leading-[1.8] space-y-4"
+              />
 
               {/* Key Insight Callout */}
               {sec.keyInsight && (
                 <div
                   className={`mt-4 pl-4 py-2.5 pr-4 rounded-r-xl bg-slate-900/75 border-l-4 ${accent.borderL}`}
                 >
-                  <p className="text-xs sm:text-sm font-medium text-slate-200">
+                  <div className="text-xs sm:text-sm font-medium text-slate-200">
                     <strong className="text-sky-300 uppercase tracking-wider text-[10px] mr-2">
                       Enseñanza Clave:
                     </strong>
-                    «{sec.keyInsight}»
-                  </p>
+                    «<BidiText text={sec.keyInsight} />»
+                  </div>
                 </div>
               )}
             </section>
@@ -760,18 +767,21 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                   )}
                 </div>
 
-                <div className="font-editorial text-base sm:text-[1.12rem] text-slate-200 leading-[1.8] space-y-4 whitespace-pre-line">
-                  {sec.content}
-                </div>
+                <BidiText
+                  as="div"
+                  paragraphs
+                  text={sec.content}
+                  className="font-editorial text-base sm:text-[1.12rem] text-slate-200 leading-[1.8] space-y-4"
+                />
 
                 {sec.keyInsight && (
                   <div className="mt-3 pl-4 py-2.5 pr-4 rounded-r-xl bg-slate-900/80 border-l-4 border-l-indigo-400">
-                    <p className="text-xs sm:text-sm font-medium text-slate-200">
+                    <div className="text-xs sm:text-sm font-medium text-slate-200">
                       <strong className="text-indigo-300 uppercase tracking-wider text-[10px] mr-2">
                         Aporte Complementario:
                       </strong>
-                      «{sec.keyInsight}»
-                    </p>
+                      «<BidiText text={sec.keyInsight} />»
+                    </div>
                   </div>
                 )}
               </section>
@@ -810,9 +820,11 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                   <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
                     1. Visión (Hashkafá)
                   </span>
-                  <p className="text-sm text-slate-200 leading-relaxed">
-                    {derasha.practicalConclusion.hashkafa}
-                  </p>
+                  <BidiText
+                    as="div"
+                    text={derasha.practicalConclusion.hashkafa}
+                    className="text-sm text-slate-200 leading-relaxed"
+                  />
                 </div>
               )}
 
@@ -821,9 +833,11 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                   <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
                     2. Kavaná Interior
                   </span>
-                  <p className="text-sm text-slate-200 leading-relaxed">
-                    {derasha.practicalConclusion.prayerKavanah}
-                  </p>
+                  <BidiText
+                    as="div"
+                    text={derasha.practicalConclusion.prayerKavanah}
+                    className="text-sm text-slate-200 leading-relaxed"
+                  />
                 </div>
               )}
 
@@ -832,9 +846,11 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
                     3. Acción Práctica (Halajá / Musar)
                   </span>
-                  <p className="text-sm text-slate-200 leading-relaxed">
-                    {derasha.practicalConclusion.dailyAction}
-                  </p>
+                  <BidiText
+                    as="div"
+                    text={derasha.practicalConclusion.dailyAction}
+                    className="text-sm text-slate-200 leading-relaxed"
+                  />
                 </div>
               )}
             </div>
@@ -890,20 +906,21 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                       </div>
 
                       <p
-                        className="font-hebrew text-sm sm:text-base text-amber-200/95 bg-slate-900/70 rounded-lg px-3 py-2 border border-slate-800 leading-relaxed"
+                        className="font-hebrew text-sm sm:text-base text-amber-200/95 bg-slate-900/70 rounded-lg px-3 py-2 border border-slate-800 leading-relaxed text-right"
                         dir="rtl"
                       >
                         «{q.briefHebrewQuote}»
                       </p>
 
-                      <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                        «{q.briefSpanishQuote}»
-                      </p>
+                      <div className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                        «<BidiText text={q.briefSpanishQuote} />»
+                      </div>
 
                       {q.mejaberAndRamaNote && (
-                        <p className="text-[11px] text-sky-300/90 leading-relaxed bg-sky-950/25 border border-sky-500/20 rounded-lg px-2.5 py-1.5">
-                          <strong>Mejaber / Ramá:</strong> {q.mejaberAndRamaNote}
-                        </p>
+                        <div className="text-[11px] text-sky-300/90 leading-relaxed bg-sky-950/25 border border-sky-500/20 rounded-lg px-2.5 py-1.5">
+                          <strong>Mejaber / Ramá:</strong>{' '}
+                          <BidiText text={q.mejaberAndRamaNote} />
+                        </div>
                       )}
                     </div>
 
@@ -1112,20 +1129,23 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                             </div>
 
                             <p
-                              className="font-hebrew text-xs sm:text-sm text-amber-100/95 bg-slate-900/70 rounded-lg px-3 py-2 border border-slate-800/90 leading-relaxed"
+                              className="font-hebrew text-xs sm:text-sm text-amber-100/95 bg-slate-900/70 rounded-lg px-3 py-2 border border-slate-800/90 leading-relaxed text-right"
                               dir="rtl"
                             >
                               «{mq.hebrewText}»
                             </p>
 
-                            <p className="text-xs text-slate-200 leading-relaxed">
-                              {mq.spanishTranslation}
-                            </p>
+                            <BidiText
+                              as="div"
+                              text={mq.spanishTranslation}
+                              className="text-xs text-slate-200 leading-relaxed"
+                            />
 
                             {mq.rulingEvolutionNote && (
-                              <p className="text-[11px] text-amber-200/90 leading-relaxed bg-amber-950/20 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
-                                <strong>Dictamen generacional:</strong> {mq.rulingEvolutionNote}
-                              </p>
+                              <div className="text-[11px] text-amber-200/90 leading-relaxed bg-amber-950/20 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
+                                <strong>Dictamen generacional:</strong>{' '}
+                                <BidiText text={mq.rulingEvolutionNote} />
+                              </div>
                             )}
                           </div>
 
@@ -1224,48 +1244,56 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                       <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 block">
                         1. Pretensión de Universalidad en {activeThinkerDetection.thinkerName}
                       </span>
-                      <p className="text-slate-200">
-                        {
+                      <BidiText
+                        as="div"
+                        text={
                           activeThinkerDetection.universalityVsSpecificityMatrix
                             .externalConceptUniversalClaim
                         }
-                      </p>
+                        className="text-slate-200"
+                      />
                     </div>
 
                     <div className="p-3.5 rounded-xl bg-slate-950/75 border border-sky-500/30 space-y-1">
                       <span className="text-[11px] font-bold uppercase tracking-wider text-sky-300 block">
                         2. Horizonte Universal en la Cosmovisión Judía
                       </span>
-                      <p className="text-slate-200">
-                        {
+                      <BidiText
+                        as="div"
+                        text={
                           activeThinkerDetection.universalityVsSpecificityMatrix
                             .torahUniversalHorizon
                         }
-                      </p>
+                        className="text-slate-200"
+                      />
                     </div>
 
                     <div className="p-3.5 rounded-xl bg-slate-950/75 border border-amber-500/30 space-y-1">
                       <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 block">
                         3. Especificidad del Mandamiento en la Torá (Mitzvá)
                       </span>
-                      <p className="text-slate-200">
-                        {
+                      <BidiText
+                        as="div"
+                        text={
                           activeThinkerDetection.universalityVsSpecificityMatrix
                             .torahCommandmentSpecificity
                         }
-                      </p>
+                        className="text-slate-200"
+                      />
                     </div>
 
                     <div className="p-3.5 rounded-xl bg-slate-950/75 border border-emerald-500/30 space-y-1">
                       <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 block">
                         4. Síntesis de Cosmovisión (Teonomía Relacional y Hashkafá)
                       </span>
-                      <p className="text-slate-200">
-                        {
+                      <BidiText
+                        as="div"
+                        text={
                           activeThinkerDetection.universalityVsSpecificityMatrix
                             .worldviewContrastSynthesis
                         }
-                      </p>
+                        className="text-slate-200"
+                      />
                     </div>
                   </div>
 
@@ -1325,28 +1353,40 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                       {activeFormalContrast.universalidadVsEspecificidad.title}
                     </h5>
                     <div className="space-y-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
-                      <p>
+                      <div>
                         <strong className="text-white">Postura de la Fuente Externa: </strong>
-                        {activeFormalContrast.universalidadVsEspecificidad.externalUniversalism}
-                      </p>
-                      <p>
+                        <BidiText
+                          text={activeFormalContrast.universalidadVsEspecificidad.externalUniversalism}
+                        />
+                      </div>
+                      <div>
                         <strong className="text-sky-300">Dimensión Universal en la Torá: </strong>
-                        {activeFormalContrast.universalidadVsEspecificidad.torahUniversalDimension}
-                      </p>
-                      <p>
+                        <BidiText
+                          text={
+                            activeFormalContrast.universalidadVsEspecificidad.torahUniversalDimension
+                          }
+                        />
+                      </div>
+                      <div>
                         <strong className="text-amber-200">
                           Especificidad del Mandamiento (Mitzvá):{' '}
                         </strong>
-                        {
-                          activeFormalContrast.universalidadVsEspecificidad
-                            .torahCommandmentSpecificity
-                        }
-                      </p>
+                        <BidiText
+                          text={
+                            activeFormalContrast.universalidadVsEspecificidad
+                              .torahCommandmentSpecificity
+                          }
+                        />
+                      </div>
                       <div className="pt-2 border-t border-slate-800/80 text-slate-200 italic">
                         <strong className="text-emerald-300 not-italic">
                           Síntesis Exegética:{' '}
                         </strong>
-                        {activeFormalContrast.universalidadVsEspecificidad.exegeticalSynthesis}
+                        <BidiText
+                          text={
+                            activeFormalContrast.universalidadVsEspecificidad.exegeticalSynthesis
+                          }
+                        />
                       </div>
                     </div>
                   </div>
@@ -1357,26 +1397,40 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                       {activeFormalContrast.fuentesInternasVsExternas.title}
                     </h5>
                     <div className="space-y-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
-                      <p>
+                      <div>
                         <strong className="text-amber-200">
                           Naturaleza de las Fuentes Internas de la Torá:{' '}
                         </strong>
-                        {activeFormalContrast.fuentesInternasVsExternas.internalTorahSourcesNature}
-                      </p>
-                      <p>
+                        <BidiText
+                          text={
+                            activeFormalContrast.fuentesInternasVsExternas.internalTorahSourcesNature
+                          }
+                        />
+                      </div>
+                      <div>
                         <strong className="text-white">
                           Naturaleza de las Fuentes Externas Consultadas:{' '}
                         </strong>
-                        {activeFormalContrast.fuentesInternasVsExternas.externalSourcesNature}
-                      </p>
-                      <p>
+                        <BidiText
+                          text={
+                            activeFormalContrast.fuentesInternasVsExternas.externalSourcesNature
+                          }
+                        />
+                      </div>
+                      <div>
                         <strong className="text-sky-300">
                           Fuente Interna del Yo vs. Fuente Externa del Pacto:{' '}
                         </strong>
-                        {activeFormalContrast.fuentesInternasVsExternas.normativeLocusContrast}
-                      </p>
+                        <BidiText
+                          text={
+                            activeFormalContrast.fuentesInternasVsExternas.normativeLocusContrast
+                          }
+                        />
+                      </div>
                       <div className="pt-2 border-t border-slate-800/80 text-amber-200/90 text-xs font-medium">
-                        {activeFormalContrast.fuentesInternasVsExternas.hermeneuticalRule}
+                        <BidiText
+                          text={activeFormalContrast.fuentesInternasVsExternas.hermeneuticalRule}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1412,17 +1466,17 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                           )}
                         </div>
                         <blockquote className="text-xs text-slate-300 italic border-l-2 border-amber-500/40 pl-3 py-0.5">
-                          «{ext.originalQuote}»
+                          «<BidiText text={ext.originalQuote} />»
                         </blockquote>
-                        <p className="text-xs text-slate-200 leading-relaxed">
+                        <div className="text-xs text-slate-200 leading-relaxed">
                           <strong className="text-slate-400">Traducción: </strong>
-                          {ext.spanishTranslation}
-                        </p>
+                          <BidiText text={ext.spanishTranslation} />
+                        </div>
                         {ext.torahContrastPoint && (
-                          <p className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 leading-relaxed">
+                          <div className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 leading-relaxed">
                             <strong>Contraste con la Torá: </strong>
-                            {ext.torahContrastPoint}
-                          </p>
+                            <BidiText text={ext.torahContrastPoint} />
+                          </div>
                         )}
                       </div>
                     ))}

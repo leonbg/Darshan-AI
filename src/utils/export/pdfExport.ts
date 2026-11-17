@@ -9,6 +9,10 @@ import {
   normalizeTheologicalKeysForExport,
   resolveDerashaExecutiveSummary,
 } from './shared';
+import {
+  sanitizeBidiControls,
+  splitTextIntoBidiBlocksForExport,
+} from '../bidiText';
 
 /**
  * Packs an array of JPEG data URLs (one per A4 page) into a valid multi-page
@@ -225,10 +229,11 @@ export async function generateLessonPdfBlob(data: LessonExportData): Promise<Blo
 
   const wrapLines = (text: string, font: string, maxWidth: number): string[] => {
     ctx.font = font;
-    const paragraphs = (text || '').split(/\n+/);
+    const paragraphs = sanitizeBidiControls(text || '').split(/\n+/);
     const lines: string[] = [];
     for (const para of paragraphs) {
-      const words = para.trim().split(/\s+/).filter(Boolean);
+      // Split only on regular ASCII spaces/tabs so \u00A0 inside short inline Hebrew phrases stays unbroken
+      const words = para.trim().split(/[ \t]+/).filter(Boolean);
       if (words.length === 0) continue;
       let current = words[0];
       for (let i = 1; i < words.length; i++) {
@@ -245,6 +250,45 @@ export async function generateLessonPdfBlob(data: LessonExportData): Promise<Blo
     return lines;
   };
 
+  const drawSingleDirectionBlock = (
+    text: string,
+    opts: {
+      font: string;
+      color: string;
+      lineHeight: number;
+      x?: number;
+      maxWidth?: number;
+      align?: CanvasTextAlign;
+      direction?: CanvasDirection;
+      leftBarColor?: string;
+      rightBarX?: number;
+      rightBarColor?: string;
+    }
+  ) => {
+    const maxW = opts.maxWidth ?? contentW;
+    const lines = wrapLines(text, opts.font, maxW);
+    const drawX = opts.x ?? marginX;
+    for (const line of lines) {
+      ensureSpace(opts.lineHeight + 4);
+      if (opts.leftBarColor) {
+        ctx.fillStyle = opts.leftBarColor;
+        ctx.fillRect(marginX, y - opts.lineHeight + 8, 4, opts.lineHeight);
+      }
+      if (opts.rightBarColor && opts.rightBarX !== undefined) {
+        ctx.fillStyle = opts.rightBarColor;
+        ctx.fillRect(opts.rightBarX, y - opts.lineHeight + 8, 4, opts.lineHeight);
+      }
+      ctx.save();
+      ctx.font = opts.font;
+      ctx.fillStyle = opts.color;
+      ctx.textAlign = opts.align || 'left';
+      ctx.direction = opts.direction || 'ltr';
+      ctx.fillText(line, drawX, y);
+      ctx.restore();
+      y += opts.lineHeight;
+    }
+  };
+
   const drawTextBlock = (
     text: string,
     opts: {
@@ -258,23 +302,36 @@ export async function generateLessonPdfBlob(data: LessonExportData): Promise<Blo
       leftBarColor?: string;
     }
   ) => {
+    if (opts.direction === 'rtl') {
+      drawSingleDirectionBlock(text, opts);
+      return;
+    }
+
     const maxW = opts.maxWidth ?? contentW;
-    const lines = wrapLines(text, opts.font, maxW);
-    const drawX = opts.x ?? marginX;
-    for (const line of lines) {
-      ensureSpace(opts.lineHeight + 4);
-      if (opts.leftBarColor) {
-        ctx.fillStyle = opts.leftBarColor;
-        ctx.fillRect(marginX, y - opts.lineHeight + 8, 4, opts.lineHeight);
+    const baseLeftX = opts.x ?? marginX;
+    const bidiBlocks = splitTextIntoBidiBlocksForExport(text);
+
+    for (const block of bidiBlocks) {
+      if (block.direction === 'rtl') {
+        y += 4;
+        const rtlLineH = Math.max(opts.lineHeight + 4, 33);
+        const rightEdgeX = baseLeftX + maxW;
+        drawSingleDirectionBlock(block.text, {
+          font: '700 23px "Frank Ruhl Libre", "Times New Roman", serif',
+          color: '#0f172a',
+          lineHeight: rtlLineH,
+          x: rightEdgeX - 14,
+          maxWidth: Math.max(maxW - 28, 220),
+          align: 'right',
+          direction: 'rtl',
+          leftBarColor: opts.leftBarColor,
+          rightBarX: rightEdgeX - 4,
+          rightBarColor: '#0284c7',
+        });
+        y += 4;
+      } else {
+        drawSingleDirectionBlock(block.text, opts);
       }
-      ctx.save();
-      ctx.font = opts.font;
-      ctx.fillStyle = opts.color;
-      ctx.textAlign = opts.align || 'left';
-      ctx.direction = opts.direction || 'ltr';
-      ctx.fillText(line, drawX, y);
-      ctx.restore();
-      y += opts.lineHeight;
     }
   };
 

@@ -91,6 +91,7 @@ import {
   areOutputPreferencesEqual,
   DEFAULT_DERASHA_OUTPUT_PREFERENCES,
 } from './utils/outputPreferences';
+import { isPredominantlyHebrew } from './utils/bidiText';
 import { AlertTriangle, ShieldCheck, RotateCcw, HardDrive, RefreshCw, X } from 'lucide-react';
 import { clearLocalAppStorageForDriveMode } from './services';
 
@@ -781,10 +782,7 @@ export default function App() {
 
   const handleSelectSample = useCallback((sample: SampleQuery) => {
     setQuery(sample.query);
-    const hasHebrew = /[\u0590-\u05FF]/.test(sample.query);
-    if (hasHebrew) {
-      setIsRtl(true);
-    }
+    setIsRtl(isPredominantlyHebrew(sample.query));
   }, []);
 
   const handleNavigateSection = useCallback(

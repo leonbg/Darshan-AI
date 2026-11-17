@@ -3,6 +3,7 @@ import {
   ComparativeDerashaAnalysisResult,
   DerashaRelationType,
 } from '../../types';
+import { BidiText } from '../../utils/bidiText';
 import {
   Sparkles,
   Link2,
@@ -67,9 +68,12 @@ export const ComparativeStudyResultView: React.FC<ComparativeStudyResultViewProp
               <Sparkles className="w-4 h-4 text-sky-400" />
               <span>Veredicto Exegético y Filosófico sobre tu Hipótesis</span>
             </div>
-            <p className="text-sm text-slate-100 leading-relaxed whitespace-pre-line">
-              {activeComparison.executiveVerdict}
-            </p>
+            <BidiText
+              as="div"
+              paragraphs
+              text={activeComparison.executiveVerdict}
+              className="text-sm text-slate-100 leading-relaxed space-y-2"
+            />
           </div>
 
           {/* Per-Derasha Thesis Cards */}
@@ -89,11 +93,15 @@ export const ComparativeStudyResultView: React.FC<ComparativeStudyResultViewProp
                     </span>
                   </div>
                   <h4 className="text-sm font-bold text-white">{item.title}</h4>
-                  <p className="text-xs text-slate-300 leading-relaxed">{item.coreThesis}</p>
-                  <p className="text-[11px] text-sky-300/90 pt-1 border-t border-slate-800/80">
+                  <BidiText
+                    as="div"
+                    text={item.coreThesis}
+                    className="text-xs text-slate-300 leading-relaxed"
+                  />
+                  <div className="text-[11px] text-sky-300/90 pt-1 border-t border-slate-800/80">
                     <strong>Ángulo normativo/filosófico:</strong>{' '}
-                    {item.normativeOrPhilosophicalAngle}
-                  </p>
+                    <BidiText text={item.normativeOrPhilosophicalAngle} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -106,9 +114,12 @@ export const ComparativeStudyResultView: React.FC<ComparativeStudyResultViewProp
                 <Link2 className="w-4 h-4 text-emerald-400" />
                 <span>1. Relación y Vínculo</span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line">
-                {activeComparison.pointsOfRelationship}
-              </p>
+              <BidiText
+                as="div"
+                paragraphs
+                text={activeComparison.pointsOfRelationship}
+                className="text-xs sm:text-sm text-slate-200 leading-relaxed space-y-2"
+              />
             </div>
 
             <div className="p-4 rounded-xl bg-[#070c18] border border-rose-500/30 space-y-2">
@@ -116,9 +127,12 @@ export const ComparativeStudyResultView: React.FC<ComparativeStudyResultViewProp
                 <Zap className="w-4 h-4 text-rose-400" />
                 <span>2. Tensión o Contradicción (Majloket)</span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line">
-                {activeComparison.pointsOfContradictionOrTension}
-              </p>
+              <BidiText
+                as="div"
+                paragraphs
+                text={activeComparison.pointsOfContradictionOrTension}
+                className="text-xs sm:text-sm text-slate-200 leading-relaxed space-y-2"
+              />
             </div>
 
             <div className="p-4 rounded-xl bg-[#070c18] border border-amber-500/30 space-y-2">
@@ -126,9 +140,12 @@ export const ComparativeStudyResultView: React.FC<ComparativeStudyResultViewProp
                 <Layers className="w-4 h-4 text-amber-400" />
                 <span>3. Complementariedad (Eilu v&apos;Eilu)</span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line">
-                {activeComparison.pointsOfComplementarity}
-              </p>
+              <BidiText
+                as="div"
+                paragraphs
+                text={activeComparison.pointsOfComplementarity}
+                className="text-xs sm:text-sm text-slate-200 leading-relaxed space-y-2"
+              />
             </div>
           </div>
 
@@ -137,9 +154,12 @@ export const ComparativeStudyResultView: React.FC<ComparativeStudyResultViewProp
             <div className="text-xs font-bold uppercase tracking-wider text-indigo-300">
               4. Síntesis Homilética Superior: Cómo unir ambas Derashot en una enseñanza maestra
             </div>
-            <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">
-              {activeComparison.dialecticalSynthesisAndHomileticBridge}
-            </p>
+            <BidiText
+              as="div"
+              paragraphs
+              text={activeComparison.dialecticalSynthesisAndHomileticBridge}
+              className="text-sm text-slate-200 leading-relaxed space-y-2"
+            />
 
             {activeComparison.canonicalBridgeSources?.length > 0 && (
               <div className="pt-3 mt-3 border-t border-slate-800/90 flex flex-wrap gap-2">

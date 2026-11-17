@@ -47,6 +47,51 @@
   letter-spacing: var(--darshan-hebrew-letter-spacing);
 }
 
+/* Strict BiDi isolation for all explicit RTL containers so multi-line Hebrew always flows top-to-bottom, right-to-left */
+[dir="rtl"] {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+/* Short inline Hebrew phrases (1-3 words) embedded inside Spanish LTR sentences:
+   atomic inline-block prevents mid-phrase line splitting across LTR lines */
+.hebrew-inline {
+  display: inline-block;
+  direction: rtl;
+  unicode-bidi: isolate;
+  text-align: right;
+  font-family: var(--darshan-font-hebrew);
+  letter-spacing: var(--darshan-hebrew-letter-spacing);
+  font-size: 1.08em;
+  line-height: 1.5;
+  white-space: nowrap;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+/* Multi-word / multi-line Hebrew citations embedded inside Spanish paragraphs:
+   dedicated RTL block box so line 1 starts at top-right and wraps strictly downwards (top-to-bottom) */
+.hebrew-embedded-block {
+  display: block;
+  width: 100%;
+  direction: rtl;
+  unicode-bidi: isolate;
+  text-align: right;
+  font-family: var(--darshan-font-hebrew);
+  letter-spacing: var(--darshan-hebrew-letter-spacing);
+  font-size: 1.18em;
+  font-weight: 600;
+  line-height: 1.85;
+  color: #f1f5f9;
+  background-color: rgba(7, 12, 24, 0.72);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-right: 3px solid rgba(56, 189, 248, 0.75);
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.95rem;
+  margin: 0.55rem 0;
+  white-space: pre-line;
+}
+
 .font-hebrew-modern {
   font-family: 'Heebo', sans-serif;
 }
@@ -85,6 +130,11 @@
   line-height: 1.85;
 }
 
+.atril-scale-atril .hebrew-embedded-block {
+  font-size: 1.35em;
+  line-height: 1.9;
+}
+
 .atril-scale-bima .font-editorial {
   font-size: 1.42rem;
   line-height: 2.0;
@@ -102,6 +152,11 @@
 
 .atril-scale-bima .font-hebrew {
   font-size: 1.8em;
+  line-height: 1.95;
+}
+
+.atril-scale-bima .hebrew-embedded-block {
+  font-size: 1.48em;
   line-height: 1.95;
 }
 
@@ -144,5 +199,11 @@
   }
   header, footer, button, textarea, #query-input {
     display: none !important;
+  }
+  .hebrew-embedded-block {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    border-right: 3px solid #0284c7 !important;
   }
 }

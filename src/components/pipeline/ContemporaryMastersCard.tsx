@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react';
 import { ContemporaryMasterReading, MasterReadingsSynthesis } from '../../types';
+import { BidiText } from '../../utils/bidiText';
 
 interface ContemporaryMastersCardProps {
   synthesis?: MasterReadingsSynthesis;
@@ -111,10 +112,14 @@ export const ContemporaryMastersCard: React.FC<ContemporaryMastersCardProps> = R
           <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
             Maestros Contemporáneos: Rabino Jonathan Sacks & Rab Yehoshua Gordon (Jabad)
           </h3>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-            {synthesis?.overview ||
-              'Explora cómo grandes pensadores contemporáneos revisitan la misma Parashá o pasaje año tras año, descubriendo en cada ciclo anual una faceta distinta: desde la filosofía ética de Covenant & Conversation hasta la calidez jasídica de Jumash con Rashi, el Tania y Likkutei Sijot.'}
-          </p>
+          <BidiText
+            as="div"
+            text={
+              synthesis?.overview ||
+              'Explora cómo grandes pensadores contemporáneos revisitan la misma Parashá o pasaje año tras año, descubriendo en cada ciclo anual una faceta distinta: desde la filosofía ética de Covenant & Conversation hasta la calidez jasídica de Jumash con Rashi, el Tania y Likkutei Sijot.'
+            }
+            className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed"
+          />
         </div>
 
         {synthesis?.detectedParashaOrTopic && (
@@ -290,20 +295,25 @@ export const ContemporaryMastersCard: React.FC<ContemporaryMastersCardProps> = R
                       <HelpCircle className="w-3.5 h-3.5 shrink-0" />
                       <span>La Pregunta Central de este Ciclo:</span>
                     </div>
-                    <p className="text-xs sm:text-sm text-slate-200 italic leading-relaxed">
-                      {reading.centralQuestion}
-                    </p>
+                    <BidiText
+                      as="div"
+                      text={reading.centralQuestion}
+                      className="text-xs sm:text-sm text-slate-200 italic leading-relaxed"
+                    />
                   </div>
 
                   {/* Core Thesis & Detailed Exposition */}
                   <div className="space-y-2.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
-                    <p className="font-semibold text-white">
+                    <div className="font-semibold text-white">
                       <span className={style.accentText}>Tesis Central: </span>
-                      {reading.coreThesis}
-                    </p>
-                    <div className="space-y-2 text-slate-300/95 whitespace-pre-line">
-                      {reading.detailedExposition}
+                      <BidiText text={reading.coreThesis} />
                     </div>
+                    <BidiText
+                      as="div"
+                      paragraphs
+                      text={reading.detailedExposition}
+                      className="space-y-2 text-slate-300/95"
+                    />
                   </div>
 
                   {/* Key Quote or Concept */}
@@ -312,7 +322,7 @@ export const ContemporaryMastersCard: React.FC<ContemporaryMastersCardProps> = R
                       <Quote className="w-3 h-3" />
                       <span>Idea Fuerza / Sello del Maestro</span>
                     </div>
-                    «{reading.keyQuoteOrConcept}»
+                    «<BidiText text={reading.keyQuoteOrConcept} />»
                   </blockquote>
                 </div>
 
@@ -320,7 +330,7 @@ export const ContemporaryMastersCard: React.FC<ContemporaryMastersCardProps> = R
                 <div className="pt-4 border-t border-slate-800/80 space-y-3">
                   <div className="text-xs text-slate-300">
                     <strong className="text-emerald-400 font-semibold">Aplicación Vital: </strong>
-                    {reading.practicalTakeaway}
+                    <BidiText text={reading.practicalTakeaway} />
                   </div>
 
                   {onAskFollowUp && (

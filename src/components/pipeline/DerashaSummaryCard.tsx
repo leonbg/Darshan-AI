@@ -24,6 +24,7 @@ import {
   resolveDerashaExecutiveSummary,
 } from '../../utils/derashaSummary';
 import { getToneMeta } from '../../utils/toneAdvisor';
+import { BidiText } from '../../utils/bidiText';
 
 interface DerashaSummaryCardProps {
   derasha: FinalDerasha;
@@ -179,9 +180,11 @@ export const DerashaSummaryCard: React.FC<DerashaSummaryCardProps> = React.memo(
             <span className="text-[11px] font-bold uppercase tracking-widest text-sky-400 block">
               Tesis Central de la Drashá
             </span>
-            <p className="font-editorial text-lg sm:text-xl text-white leading-relaxed font-semibold text-balance">
-              {summary.headlineThesis}
-            </p>
+            <BidiText
+              as="div"
+              text={summary.headlineThesis}
+              className="font-editorial text-lg sm:text-xl text-white leading-relaxed font-semibold text-balance"
+            />
           </section>
 
           {/* Síntesis Narrativa */}
@@ -189,9 +192,12 @@ export const DerashaSummaryCard: React.FC<DerashaSummaryCardProps> = React.memo(
             <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 block">
               Síntesis Narrativa (Visión Panorámica)
             </span>
-            <p className="font-editorial text-base sm:text-[1.12rem] text-slate-200 leading-[1.8]">
-              {summary.abstractNarrative}
-            </p>
+            <BidiText
+              as="div"
+              paragraphs
+              text={summary.abstractNarrative}
+              className="font-editorial text-base sm:text-[1.12rem] text-slate-200 leading-[1.8] space-y-3"
+            />
           </section>
 
           {/* Pilares y Puntos Clave */}
@@ -220,9 +226,11 @@ export const DerashaSummaryCard: React.FC<DerashaSummaryCardProps> = React.memo(
                         {pillar.label}
                       </h3>
                     </div>
-                    <p className="text-sm text-slate-300 leading-relaxed">
-                      {pillar.takeaway}
-                    </p>
+                    <BidiText
+                      as="div"
+                      text={pillar.takeaway}
+                      className="text-sm text-slate-300 leading-relaxed"
+                    />
                   </div>
                 ))}
               </div>
@@ -238,9 +246,11 @@ export const DerashaSummaryCard: React.FC<DerashaSummaryCardProps> = React.memo(
                   Aplicación Práctica (Halajá y Musar)
                 </span>
               </div>
-              <p className="font-editorial text-base text-slate-100 leading-relaxed">
-                {summary.practicalTakeaway}
-              </p>
+              <BidiText
+                as="div"
+                text={summary.practicalTakeaway}
+                className="font-editorial text-base text-slate-100 leading-relaxed"
+              />
             </section>
 
             <section className="rounded-2xl bg-[#090f1d]/90 border border-slate-800/90 p-5 space-y-2">

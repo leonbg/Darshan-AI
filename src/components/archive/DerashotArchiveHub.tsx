@@ -24,6 +24,7 @@ import { User } from '../../services/firebase';
 import { DriveSyncSummary } from '../../services/googleDriveStorageService';
 import { SplitScreenComparator } from './SplitScreenComparator';
 import { ComparativeStudyResultView } from './ComparativeStudyResultView';
+import { BidiText } from '../../utils/bidiText';
 
 interface DerashotArchiveHubProps {
   archive: ArchivedDerashaEntry[];
@@ -561,9 +562,12 @@ export const DerashotArchiveHub: React.FC<DerashotArchiveHubProps> = React.memo(
                       )}
 
                       {isExpanded && (
-                        <div className="mt-3 pt-3 border-t border-slate-800/80 text-xs text-slate-200 whitespace-pre-line leading-relaxed bg-[#050912] p-3.5 rounded-lg">
-                          {item.essaySummary}
-                        </div>
+                        <BidiText
+                          as="div"
+                          paragraphs
+                          text={item.essaySummary}
+                          className="mt-3 pt-3 border-t border-slate-800/80 text-xs text-slate-200 leading-relaxed bg-[#050912] p-3.5 rounded-lg space-y-2"
+                        />
                       )}
                     </div>
                   );

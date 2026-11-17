@@ -21,6 +21,11 @@ import {
   hasCustomOutputPreferences,
   summarizeOutputPreferencesEs,
 } from '../../utils/outputPreferences';
+import {
+  BidiText,
+  formatBidiInlineHtml,
+  formatBidiParagraphsHtml,
+} from '../../utils/bidiText';
 
 interface PardesViewProps {
   derasha: FinalDerasha;
@@ -278,9 +283,9 @@ export function buildPardesPrintableHtml(
         </div>
       </div>
       <div class="card-body">
-        <p class="exposition">${escapeHtml(sec.exposition).replace(/\n/g, '<br/>')}</p>
+        ${formatBidiParagraphsHtml(sec.exposition, 'exposition')}
         <div class="takeaway" style="background: ${p.bg}; border: 1px solid ${p.border};">
-          <strong style="color: ${p.color};">Síntesis / Ejercicio:</strong> ${escapeHtml(
+          <strong style="color: ${p.color};">Síntesis / Ejercicio:</strong> ${formatBidiInlineHtml(
         sec.keyTakeaway
       )}
         </div>
@@ -296,13 +301,13 @@ export function buildPardesPrintableHtml(
       <div class="section-kicker">CONCLUSIÓN Y LLAMADA A LA ACCIÓN MORAL / ESPIRITUAL</div>
       <h3 class="conclusion-title">${escapeHtml(derasha.practicalConclusion.title)}</h3>
       <ul class="conclusion-list">
-        <li><strong>Visión del Mundo (Hashkafá):</strong> ${escapeHtml(
+        <li><strong>Visión del Mundo (Hashkafá):</strong> ${formatBidiInlineHtml(
           derasha.practicalConclusion.hashkafa
         )}</li>
-        <li><strong>Kavaná e Introspección:</strong> ${escapeHtml(
+        <li><strong>Kavaná e Introspección:</strong> ${formatBidiInlineHtml(
           derasha.practicalConclusion.prayerKavanah
         )}</li>
-        <li><strong>Acción Práctica (Tikún Midot):</strong> ${escapeHtml(
+        <li><strong>Acción Práctica (Tikún Midot):</strong> ${formatBidiInlineHtml(
           derasha.practicalConclusion.dailyAction
         )}</li>
       </ul>
@@ -494,6 +499,33 @@ export function buildPardesPrintableHtml(
       margin: 0 0 10px 0;
       color: #1e293b;
       text-align: justify;
+    }
+    .hebrew-inline {
+      display: inline-block;
+      direction: rtl;
+      unicode-bidi: isolate;
+      text-align: right;
+      white-space: nowrap;
+      font-family: 'Frank Ruhl Libre', 'Times New Roman', serif;
+      font-weight: 600;
+    }
+    .hebrew-embedded-block {
+      display: block;
+      width: 100%;
+      direction: rtl;
+      unicode-bidi: isolate;
+      text-align: right;
+      font-family: 'Frank Ruhl Libre', 'Times New Roman', serif;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.75;
+      color: #0f172a;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-right: 3px solid #0284c7;
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin: 6px 0;
     }
     .takeaway {
       padding: 8px 10px;
@@ -835,7 +867,7 @@ export const PardesView: React.FC<PardesViewProps> = React.memo(({
       {/* Exordium Quote (full hairline border, no border-l-4) */}
       {derasha.openingExordium && (
         <div className="p-4 sm:p-5 rounded-xl bg-[#090f1d]/90 border border-slate-800 text-slate-300 font-editorial italic text-sm sm:text-base leading-relaxed">
-          « {derasha.openingExordium} »
+          « <BidiText text={derasha.openingExordium} /> »
         </div>
       )}
 
@@ -926,17 +958,20 @@ export const PardesView: React.FC<PardesViewProps> = React.memo(({
                 </div>
 
                 {/* Main exposition */}
-                <div className="text-sm sm:text-base text-slate-200 leading-relaxed font-sans whitespace-pre-line">
-                  {sec.exposition}
-                </div>
+                <BidiText
+                  as="div"
+                  paragraphs
+                  text={sec.exposition}
+                  className="text-sm sm:text-base text-slate-200 leading-relaxed font-sans space-y-3"
+                />
               </div>
 
               {/* Key Takeaway Banner */}
               <div className="p-3.5 rounded-xl bg-[#090f1d]/90 border border-slate-800/90 flex items-start gap-2.5 text-xs sm:text-sm">
                 <Sparkles className={`w-4 h-4 ${colorClasses.accentText} shrink-0 mt-0.5`} />
-                <div className="text-slate-300">
+                <div className="text-slate-300 min-w-0 flex-1">
                   <strong className={colorClasses.accentText}>Principio / Ejercicio:</strong>{' '}
-                  <span className="text-slate-100">{sec.keyTakeaway}</span>
+                  <BidiText text={sec.keyTakeaway} className="text-slate-100" />
                 </div>
               </div>
             </div>

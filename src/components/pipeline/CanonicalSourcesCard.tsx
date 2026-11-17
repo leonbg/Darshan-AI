@@ -18,6 +18,7 @@ import {
   stripAllHtml,
   evaluateSourceTranslationStatus,
 } from '../../services/sefaria';
+import { BidiText } from '../../utils/bidiText';
 
 interface CanonicalSourcesCardProps {
   sources: VerifiedSefariaSource[];
@@ -183,9 +184,12 @@ export const CanonicalSourcesCard: React.FC<CanonicalSourcesCardProps> = React.m
           <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
             <span>Articulación Exegética de las Fuentes Canónicas</span>
           </h4>
-          <p className="text-sm text-slate-200 leading-relaxed">
-            {canonicalAnalysis.synthesis}
-          </p>
+          <BidiText
+            as="div"
+            paragraphs
+            text={canonicalAnalysis.synthesis}
+            className="text-sm text-slate-200 leading-relaxed space-y-2"
+          />
         </div>
       )}
 
@@ -221,17 +225,17 @@ export const CanonicalSourcesCard: React.FC<CanonicalSourcesCardProps> = React.m
                   </div>
                 </div>
                 <blockquote className="text-xs text-slate-300 italic border-l-2 border-amber-500/40 pl-2.5">
-                  «{ext.originalQuote}»
+                  «<BidiText text={ext.originalQuote} />»
                 </blockquote>
-                <p className="text-xs text-slate-200 leading-relaxed">
+                <div className="text-xs text-slate-200 leading-relaxed">
                   <strong className="text-slate-400">Traducción: </strong>
-                  {ext.spanishTranslation}
-                </p>
+                  <BidiText text={ext.spanishTranslation} />
+                </div>
                 {ext.torahContrastPoint && (
-                  <p className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 leading-relaxed">
+                  <div className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 leading-relaxed">
                     <strong>Contraste con las Fuentes Internas de la Torá: </strong>
-                    {ext.torahContrastPoint}
-                  </p>
+                    <BidiText text={ext.torahContrastPoint} />
+                  </div>
                 )}
               </div>
             ))}
@@ -434,18 +438,18 @@ export const CanonicalSourcesCard: React.FC<CanonicalSourcesCardProps> = React.m
                   {/* Translation Text Render */}
                   {selectedTab === 'es' && hasSpanish ? (
                     <div className="space-y-1 pt-1">
-                      <p className="text-sm sm:text-base text-slate-100 leading-relaxed font-sans font-medium">
-                        « {spanishText} »
-                      </p>
+                      <div className="text-sm sm:text-base text-slate-100 leading-relaxed font-sans font-medium">
+                        « <BidiText text={spanishText} /> »
+                      </div>
                       <span className="text-[10px] text-emerald-400/90 italic block">
                         Traducción rabínica fidedigna al español
                       </span>
                     </div>
                   ) : hasEnglish ? (
                     <div className="space-y-1 pt-1">
-                      <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-sans italic">
-                        « {englishText} »
-                      </p>
+                      <div className="text-sm sm:text-base text-slate-300 leading-relaxed font-sans italic">
+                        « <BidiText text={englishText} /> »
+                      </div>
                       <span className="text-[10px] text-slate-500 block">
                         Versión en inglés de Sefaria.org
                       </span>
@@ -461,9 +465,9 @@ export const CanonicalSourcesCard: React.FC<CanonicalSourcesCardProps> = React.m
                 {echoConnection && (
                   <div className="p-3 rounded-lg bg-slate-850/80 border border-slate-700/50 text-xs text-slate-300 flex items-start gap-2">
                     <Quote className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <strong className="text-sky-300">Conexión exegética:</strong>{' '}
-                      <span>{echoConnection.connection}</span>
+                      <BidiText text={echoConnection.connection} />
                     </div>
                   </div>
                 )}

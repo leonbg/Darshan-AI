@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Compass, HeartHandshake, Eye, Sparkles, Copy, Check, Share2 } from 'lucide-react';
 import { ConclusionLength, FinalDerasha } from '../../types';
 import { getConclusionLengthLabelEs } from '../../utils/outputPreferences';
+import { BidiText } from '../../utils/bidiText';
 
 interface PracticalConclusionCardProps {
   conclusion: FinalDerasha['practicalConclusion'];
@@ -84,9 +85,11 @@ export const PracticalConclusionCard: React.FC<PracticalConclusionCardProps> = R
             <Eye className="w-4 h-4" />
             <span>1. Cosmovisión (Hashkafá)</span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {conclusion.hashkafa}
-          </p>
+          <BidiText
+            as="div"
+            text={conclusion.hashkafa}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed"
+          />
         </div>
 
         {/* Tefilah Kavanah */}
@@ -95,9 +98,11 @@ export const PracticalConclusionCard: React.FC<PracticalConclusionCardProps> = R
             <Sparkles className="w-4 h-4" />
             <span>2. Kavaná en el Estudio y la Tefilá</span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {conclusion.prayerKavanah}
-          </p>
+          <BidiText
+            as="div"
+            text={conclusion.prayerKavanah}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed"
+          />
         </div>
 
         {/* Daily Action */}
@@ -106,9 +111,11 @@ export const PracticalConclusionCard: React.FC<PracticalConclusionCardProps> = R
             <HeartHandshake className="w-4 h-4" />
             <span>3. Vida Diaria (Tikún Midot)</span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {conclusion.dailyAction}
-          </p>
+          <BidiText
+            as="div"
+            text={conclusion.dailyAction}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed"
+          />
         </div>
       </div>
     </div>

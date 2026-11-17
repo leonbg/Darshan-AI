@@ -13,6 +13,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { FollowUpItem } from '../../types';
+import { BidiMarkdown, BidiText } from '../../utils/bidiText';
 
 interface ExegesisFollowUpProps {
   onAskQuestion: (question: string) => Promise<void>;
@@ -229,67 +230,7 @@ export const ExegesisFollowUp: React.FC<ExegesisFollowUpProps> = React.memo(({
     setTimeout(() => setCopiedId(null), 1500);
   }, []);
 
-  const renderFormattedMarkdown = (content: string) => {
-    const lines = content.split('\n');
-    return lines.map((line, idx) => {
-      const trimmed = line.trim();
-
-      if (trimmed.startsWith('### ')) {
-        return (
-          <h4 key={idx} className="text-base font-bold text-sky-300 mt-4 mb-2 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-            <span>{trimmed.replace('### ', '')}</span>
-          </h4>
-        );
-      }
-      if (trimmed.startsWith('## ')) {
-        return (
-          <h3 key={idx} className="text-lg font-bold text-white mt-5 mb-2 pb-1 border-b border-slate-700/60">
-            {trimmed.replace('## ', '')}
-          </h3>
-        );
-      }
-      if (trimmed.startsWith('# ')) {
-        return (
-          <h2 key={idx} className="text-xl font-extrabold text-white mt-6 mb-3">
-            {trimmed.replace('# ', '')}
-          </h2>
-        );
-      }
-      if (trimmed.startsWith('> ')) {
-        return (
-          <blockquote key={idx} className="my-2.5 p-3 rounded-xl bg-slate-950/70 border-l-4 border-l-sky-400 text-slate-300 italic text-xs sm:text-sm">
-            {trimmed.replace('> ', '')}
-          </blockquote>
-        );
-      }
-      if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
-        const itemText = trimmed.replace(/^(\*|-)\s+/, '');
-        return (
-          <li key={idx} className="ml-4 list-disc text-slate-300 text-xs sm:text-sm my-1 leading-relaxed">
-            <span dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(itemText) }} />
-          </li>
-        );
-      }
-      if (trimmed === '---') {
-        return <hr key={idx} className="my-4 border-slate-700/60" />;
-      }
-      if (!trimmed) {
-        return <div key={idx} className="h-2" />;
-      }
-
-      return (
-        <p key={idx} className="text-xs sm:text-sm text-slate-200 leading-relaxed my-1.5" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(line) }} />
-      );
-    });
-  };
-
-  const formatInlineMarkdown = (text: string) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em class="text-sky-200">$1</em>')
-      .replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 rounded bg-slate-800 text-sky-300 font-mono text-xs">$1</code>');
-  };
+  // Markdown + BiDi rendering delegated to <BidiMarkdown />
 
   return (
     <div className="bg-[#0d1629] border-2 border-sky-500/40 rounded-2xl p-5 sm:p-7 shadow-xl shadow-sky-950/30 space-y-6">
@@ -447,7 +388,7 @@ export const ExegesisFollowUp: React.FC<ExegesisFollowUpProps> = React.memo(({
                     {idx + 1}
                   </div>
                   <h4 className="text-sm font-bold text-white">
-                    {item.question}
+                    <BidiText text={item.question} />
                   </h4>
                 </div>
 
@@ -473,7 +414,7 @@ export const ExegesisFollowUp: React.FC<ExegesisFollowUpProps> = React.memo(({
 
               {/* Answer content */}
               <div className="p-5 sm:p-6 space-y-1 font-sans">
-                {renderFormattedMarkdown(item.answer)}
+                <BidiMarkdown content={item.answer} />
 
                 {item.relatedSefariaReferences && item.relatedSefariaReferences.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-slate-800/70 flex flex-wrap items-center gap-2">

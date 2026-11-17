@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MesilatYesharimShot } from '../../types';
 import { requestMesilatShot, requestTranslateSource } from '../../services/api';
 import { isLikelyEnglishText } from '../../services/sefaria';
+import { BidiText } from '../../utils/bidiText';
 import {
   ExternalLink,
   RefreshCw,
@@ -312,9 +313,9 @@ export const MesilatYesharimShotsCard: React.FC<MesilatYesharimShotsCardProps> =
                     1. Definición Breve (El Ramjal)
                   </h4>
                 </div>
-                <p className="text-sm text-slate-200 leading-relaxed">
-                  {shot.briefDefinition}
-                </p>
+                <div className="text-sm text-slate-200 leading-relaxed">
+                  <BidiText text={shot.briefDefinition} />
+                </div>
               </div>
               <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
                 Concepto raíz en <span className="italic">Mesilat Yesharim</span>
@@ -330,9 +331,9 @@ export const MesilatYesharimShotsCard: React.FC<MesilatYesharimShotsCardProps> =
                     2. Obstáculo Común
                   </h4>
                 </div>
-                <p className="text-sm text-slate-200 leading-relaxed">
-                  {shot.commonObstacle}
-                </p>
+                <div className="text-sm text-slate-200 leading-relaxed">
+                  <BidiText text={shot.commonObstacle} />
+                </div>
               </div>
               <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
                 Fricción psicológica y espiritual diaria
@@ -350,9 +351,9 @@ export const MesilatYesharimShotsCard: React.FC<MesilatYesharimShotsCardProps> =
                     </h4>
                   </div>
                 </div>
-                <p className="text-sm text-emerald-100/95 leading-relaxed font-medium">
-                  {shot.dailyAction}
-                </p>
+                <div className="text-sm text-emerald-100/95 leading-relaxed font-medium">
+                  <BidiText text={shot.dailyAction} />
+                </div>
               </div>
 
               <button
@@ -381,9 +382,9 @@ export const MesilatYesharimShotsCard: React.FC<MesilatYesharimShotsCardProps> =
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Enfoque Práctico Contemporáneo (Estilo Jabad / Aish Latino)</span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                {shot.chabadOrAishInsight}
-              </p>
+              <div className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                <BidiText text={shot.chabadOrAishInsight} />
+              </div>
             </div>
 
             <button
@@ -427,7 +428,7 @@ export const MesilatYesharimShotsCard: React.FC<MesilatYesharimShotsCardProps> =
                 {/* Hebrew Text */}
                 <div
                   dir="rtl"
-                  className="p-3.5 rounded-lg bg-slate-900/90 border border-slate-800 font-hebrew text-lg sm:text-xl leading-relaxed text-amber-100"
+                  className="p-3.5 rounded-lg bg-slate-900/90 border border-slate-800 font-hebrew text-lg sm:text-xl leading-relaxed text-amber-100 text-right whitespace-pre-line"
                 >
                   {shot.hebrewExcerpt}
                 </div>
@@ -460,9 +461,9 @@ export const MesilatYesharimShotsCard: React.FC<MesilatYesharimShotsCardProps> =
                     </div>
                   ) : null}
 
-                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed italic">
-                    «{shot.spanishTranslation}»
-                  </p>
+                  <div className="text-xs sm:text-sm text-slate-200 leading-relaxed italic">
+                    <BidiText text={`«${shot.spanishTranslation}»`} />
+                  </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/60">
                     <span>Rabí Moshé Jaim Luzzatto (Ramjal, 1740)</span>
                     <a

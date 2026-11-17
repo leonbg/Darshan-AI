@@ -1,6 +1,7 @@
 import React from 'react';
 import { BookA, Check, Copy } from 'lucide-react';
 import { MorphologyItem } from '../../types';
+import { BidiText } from '../../utils/bidiText';
 
 interface MorphologyCardProps {
   primaryHebrew?: string;
@@ -83,12 +84,15 @@ export const MorphologyCard: React.FC<MorphologyCardProps> = React.memo(({
           <h4 className="text-[11px] font-semibold uppercase tracking-widest text-sky-400">
             Síntesis Teológica de la Gramática
           </h4>
-          <p className="text-sm text-slate-200 leading-relaxed">
-            {synthesis.summary}
-          </p>
+          <BidiText
+            as="div"
+            text={synthesis.summary}
+            className="text-sm text-slate-200 leading-relaxed"
+          />
           {synthesis.keyTheologicalInsight && (
             <div className="p-3 rounded-lg bg-[#090f1d]/80 border border-slate-800 text-xs text-sky-200">
-              <strong className="text-sky-300">Enseñanza medular:</strong> {synthesis.keyTheologicalInsight}
+              <strong className="text-sky-300">Enseñanza medular:</strong>{' '}
+              <BidiText text={synthesis.keyTheologicalInsight} />
             </div>
           )}
         </div>
@@ -132,7 +136,10 @@ export const MorphologyCard: React.FC<MorphologyCardProps> = React.memo(({
             {/* Unboxed grammatical metadata line */}
             <div className="text-xs text-slate-300 pt-1 border-t border-slate-800/80 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>
-                Raíz: <strong className="font-hebrew text-sm text-sky-300">{item.root}</strong>
+                Raíz:{' '}
+                <strong dir="rtl" className="font-hebrew text-sm text-sky-300">
+                  {item.root}
+                </strong>
               </span>
               <span className="text-slate-600">·</span>
               <span className="text-slate-300 font-medium">{item.binyan}</span>
@@ -145,9 +152,11 @@ export const MorphologyCard: React.FC<MorphologyCardProps> = React.memo(({
               <span className="text-sky-400 font-semibold block mb-0.5">
                 Implicación Teológica:
               </span>
-              <p className="text-slate-300 text-xs">
-                {item.theologicalImplication}
-              </p>
+              <BidiText
+                as="div"
+                text={item.theologicalImplication}
+                className="text-slate-300 text-xs"
+              />
             </div>
           </div>
         ))}

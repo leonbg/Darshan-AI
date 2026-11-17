@@ -11,6 +11,10 @@ import {
   normalizeTheologicalKeysForExport,
   resolveDerashaExecutiveSummary,
 } from './shared';
+import {
+  formatBidiInlineHtml,
+  formatBidiParagraphsHtml,
+} from '../bidiText';
 
 /**
  * Builds the complete printable & editable HTML document including ALL cards,
@@ -73,11 +77,7 @@ export function buildLessonPrintableHtml(
   });
 
   const renderSectionHtmlBlock = (sec: NormalizedExportSection) => {
-    const paragraphs = (sec.content || '')
-      .split(/\n\n+/)
-      .filter(Boolean)
-      .map((p) => `<p class="body-p">${escapeHtml(p.trim())}</p>`)
-      .join('');
+    const paragraphs = formatBidiParagraphsHtml(sec.content || '', 'body-p');
 
     const badgeColor = sec.isComplementary ? '#92400e' : '#0369a1';
     const badgeBg = sec.isComplementary ? '#fef3c7' : '#e0f2fe';
@@ -109,7 +109,7 @@ export function buildLessonPrintableHtml(
         ${
           sec.keyInsight
             ? `<div class="insight-box">
-                <strong>Enseñanza Clave:</strong> «${escapeHtml(sec.keyInsight)}»
+                <strong>Enseñanza Clave:</strong> «${formatBidiInlineHtml(sec.keyInsight)}»
               </div>`
             : ''
         }
@@ -430,20 +430,20 @@ export function buildLessonPrintableHtml(
             <p class="body-p" style="margin-bottom:4px;"><strong>${escapeHtml(
               r.readingTitle
             )}</strong></p>
-            <p class="body-p" style="margin-bottom:6px;"><strong>Tesis Central:</strong> ${escapeHtml(
+            <p class="body-p" style="margin-bottom:6px;"><strong>Tesis Central:</strong> ${formatBidiInlineHtml(
               r.coreThesis
             )}</p>
-            <p class="body-p" style="margin-bottom:6px;">${escapeHtml(r.detailedExposition)}</p>
+            ${formatBidiParagraphsHtml(r.detailedExposition, 'body-p')}
             ${
               r.keyQuoteOrConcept
-                ? `<div class="insight-box" style="margin-bottom:6px;"><strong>Cita / Concepto Clave:</strong> «${escapeHtml(
+                ? `<div class="insight-box" style="margin-bottom:6px;"><strong>Cita / Concepto Clave:</strong> «${formatBidiInlineHtml(
                     r.keyQuoteOrConcept
                   )}»</div>`
                 : ''
             }
             ${
               r.practicalTakeaway
-                ? `<p class="source-trans" style="color:#047857;"><strong>Enseñanza Práctica:</strong> ${escapeHtml(
+                ? `<p class="source-trans" style="color:#047857;"><strong>Enseñanza Práctica:</strong> ${formatBidiInlineHtml(
                     r.practicalTakeaway
                   )}</p>`
                 : ''
@@ -467,8 +467,8 @@ export function buildLessonPrintableHtml(
           <div class="source-item">
             <p style="font-weight:bold;color:#0369a1;margin:0 0 6px 0;">Pregunta ${
               idx + 1
-            }: ${escapeHtml(fu.question)}</p>
-            <p class="body-p">${escapeHtml(fu.answer)}</p>
+            }: ${formatBidiInlineHtml(fu.question)}</p>
+            ${formatBidiParagraphsHtml(fu.answer, 'body-p')}
             ${
               fu.relatedSefariaReferences && fu.relatedSefariaReferences.length > 0
                 ? `<p class="source-trans" style="color:#0369a1;"><strong>Referencias Citadas:</strong> ${escapeHtml(
@@ -497,23 +497,23 @@ export function buildLessonPrintableHtml(
         )}</h2>
         ${
           derasha.practicalConclusion.hashkafa
-            ? `<p class="body-p"><strong>Visión (Hashkafá):</strong> ${escapeHtml(
+            ? `<div class="body-p"><strong>Visión (Hashkafá):</strong> ${formatBidiInlineHtml(
                 derasha.practicalConclusion.hashkafa
-              )}</p>`
+              )}</div>`
             : ''
         }
         ${
           derasha.practicalConclusion.prayerKavanah
-            ? `<p class="body-p"><strong>Kavaná Interior:</strong> ${escapeHtml(
+            ? `<div class="body-p"><strong>Kavaná Interior:</strong> ${formatBidiInlineHtml(
                 derasha.practicalConclusion.prayerKavanah
-              )}</p>`
+              )}</div>`
             : ''
         }
         ${
           derasha.practicalConclusion.dailyAction
-            ? `<p class="body-p" style="margin-bottom:0;"><strong>Acción Práctica Cotidiana:</strong> ${escapeHtml(
+            ? `<div class="body-p" style="margin-bottom:0;"><strong>Acción Práctica Cotidiana:</strong> ${formatBidiInlineHtml(
                 derasha.practicalConclusion.dailyAction
-              )}</p>`
+              )}</div>`
             : ''
         }
       </div>
@@ -667,6 +667,33 @@ export function buildLessonPrintableHtml(
       margin: 0 0 10px 0;
       text-align: justify;
     }
+    .hebrew-inline {
+      display: inline-block;
+      direction: rtl;
+      unicode-bidi: isolate;
+      text-align: right;
+      white-space: nowrap;
+      font-family: 'Frank Ruhl Libre', 'Times New Roman', serif;
+      font-weight: 600;
+    }
+    .hebrew-embedded-block {
+      display: block;
+      width: 100%;
+      direction: rtl;
+      unicode-bidi: isolate;
+      text-align: right;
+      font-family: 'Frank Ruhl Libre', 'Times New Roman', serif;
+      font-size: 13.5pt;
+      font-weight: 700;
+      line-height: 1.75;
+      color: #0f172a;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-right: 3px solid #0284c7;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 8px 0 10px 0;
+    }
     .insight-box {
       background: #f8fafc;
       border-left: 3px solid #0284c7;
@@ -792,19 +819,17 @@ export function buildLessonPrintableHtml(
       return `
       <div class="section-block" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:14px 18px;">
         <div class="meta-kicker" style="margin-bottom:4px;">Resumen Ejecutivo de la Drashá</div>
-        <p class="body-p" style="font-weight:700;color:#0f172a;margin-bottom:6px;">
-          Tesis Central: ${escapeHtml(execSummary.headlineThesis)}
-        </p>
-        <p class="body-p" style="margin-bottom:8px;">
-          ${escapeHtml(execSummary.abstractNarrative)}
-        </p>
+        <div class="body-p" style="font-weight:700;color:#0f172a;margin-bottom:6px;">
+          Tesis Central: ${formatBidiInlineHtml(execSummary.headlineThesis)}
+        </div>
+        ${formatBidiParagraphsHtml(execSummary.abstractNarrative, 'body-p')}
         ${
           execSummary.keyPillars.length > 0
             ? `<ul style="margin:0 0 8px 18px;padding:0;font-size:11pt;color:#1e293b;">
                 ${execSummary.keyPillars
                   .map(
                     (p) =>
-                      `<li style="margin-bottom:4px;"><strong>${escapeHtml(p.label)}:</strong> ${escapeHtml(
+                      `<li style="margin-bottom:4px;"><strong>${escapeHtml(p.label)}:</strong> ${formatBidiInlineHtml(
                         p.takeaway
                       )}</li>`
                   )
@@ -812,9 +837,9 @@ export function buildLessonPrintableHtml(
                </ul>`
             : ''
         }
-        <p class="body-p" style="margin-bottom:0;font-size:11pt;color:#0369a1;">
-          <strong>Aplicación Práctica:</strong> ${escapeHtml(execSummary.practicalTakeaway)}
-        </p>
+        <div class="body-p" style="margin-bottom:0;font-size:11pt;color:#0369a1;">
+          <strong>Aplicación Práctica:</strong> ${formatBidiInlineHtml(execSummary.practicalTakeaway)}
+        </div>
       </div>`;
     })()}
 
@@ -840,7 +865,10 @@ export function buildLessonPrintableHtml(
 
     ${
       derasha?.openingExordium
-        ? `<div class="opening-hook">${escapeHtml(derasha.openingExordium)}</div>`
+        ? `<div class="opening-hook">${formatBidiParagraphsHtml(
+            derasha.openingExordium,
+            'body-p'
+          )}</div>`
         : ''
     }
 

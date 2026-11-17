@@ -38,6 +38,7 @@ import {
   makeSafeSlug,
   shareOrDownloadFile,
 } from '../../utils/documentExport';
+import { BidiText } from '../../utils/bidiText';
 
 export type { ExportScope };
 
@@ -622,9 +623,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   <div className="text-[10px] font-bold uppercase tracking-widest text-sky-400 mb-1">
                     Exordio y Planteamiento Central
                   </div>
-                  <p className="font-editorial text-base text-slate-200 italic leading-relaxed whitespace-pre-line">
-                    {effectiveDerasha.openingExordium}
-                  </p>
+                  <BidiText
+                    as="div"
+                    paragraphs
+                    text={effectiveDerasha.openingExordium}
+                    className="font-editorial text-base text-slate-200 italic leading-relaxed space-y-2"
+                  />
                 </div>
               )}
 
@@ -664,14 +668,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                       )}
                     </div>
 
-                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">
-                      {sec.content}
-                    </p>
+                    <BidiText
+                      as="div"
+                      paragraphs
+                      text={sec.content}
+                      className="text-sm text-slate-200 leading-relaxed space-y-2"
+                    />
 
                     {sec.keyInsight && (
                       <div className="p-3 rounded-xl bg-slate-950/80 border-l-2 border-sky-400 text-xs text-slate-200">
                         <strong className="text-sky-300">Enseñanza Clave:</strong>{' '}
-                        «{sec.keyInsight}»
+                        «<BidiText text={sec.keyInsight} />»
                       </div>
                     )}
                   </div>
@@ -689,24 +696,24 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   </h4>
                   <div className="space-y-1.5 text-xs text-slate-200 pt-1">
                     {effectiveDerasha.practicalConclusion.hashkafa && (
-                      <p>
+                      <div>
                         <strong className="text-sky-300">Visión (Hashkafá):</strong>{' '}
-                        {effectiveDerasha.practicalConclusion.hashkafa}
-                      </p>
+                        <BidiText text={effectiveDerasha.practicalConclusion.hashkafa} />
+                      </div>
                     )}
                     {effectiveDerasha.practicalConclusion.prayerKavanah && (
-                      <p>
+                      <div>
                         <strong className="text-amber-300">Kavaná Interior:</strong>{' '}
-                        {effectiveDerasha.practicalConclusion.prayerKavanah}
-                      </p>
+                        <BidiText text={effectiveDerasha.practicalConclusion.prayerKavanah} />
+                      </div>
                     )}
                     {effectiveDerasha.practicalConclusion.dailyAction && (
-                      <p>
+                      <div>
                         <strong className="text-emerald-300">
                           Acción Práctica Cotidiana:
                         </strong>{' '}
-                        {effectiveDerasha.practicalConclusion.dailyAction}
-                      </p>
+                        <BidiText text={effectiveDerasha.practicalConclusion.dailyAction} />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -871,9 +878,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                             <p className="text-slate-200 font-semibold">
                               {r.readingTitle}: {r.coreThesis}
                             </p>
-                            <p className="text-slate-300">
-                              {r.detailedExposition}
-                            </p>
+                            <BidiText
+                              as="div"
+                              paragraphs
+                              text={r.detailedExposition}
+                              className="text-slate-300 space-y-1.5"
+                            />
                           </div>
                         )
                       )}
@@ -893,12 +903,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                       key={f.id || i}
                       className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1 text-xs"
                     >
-                      <p className="font-bold text-sky-300">
-                        P{i + 1}: {f.question}
-                      </p>
-                      <p className="text-slate-200 whitespace-pre-line">
-                        {f.answer}
-                      </p>
+                      <div className="font-bold text-sky-300">
+                        P{i + 1}: <BidiText text={f.question} />
+                      </div>
+                      <BidiText
+                        as="div"
+                        paragraphs
+                        text={f.answer}
+                        className="text-slate-200 space-y-1.5"
+                      />
                     </div>
                   ))}
                 </div>

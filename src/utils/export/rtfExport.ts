@@ -10,11 +10,16 @@ import {
   normalizeTheologicalKeysForExport,
   resolveDerashaExecutiveSummary,
 } from './shared';
+import {
+  sanitizeBidiControls,
+  splitTextIntoBidiBlocksForExport,
+} from '../bidiText';
 
 /**
  * Helper to encode any string into RTF 1.5 ASCII with signed 16-bit Unicode escapes (\uN?)
  */
-function toRtfUnicode(text: string): string {
+function toRtfUnicode(rawText: string): string {
+  const text = sanitizeBidiControls(rawText);
   if (!text) return '';
   let out = '';
   for (let i = 0; i < text.length; i++) {
@@ -33,6 +38,21 @@ function toRtfUnicode(text: string): string {
     }
   }
   return out;
+}
+
+function pushBidiRtfProse(rtf: string[], text: string, ltrHeader = '\\pard\\sa180\\sl300\\slmult1\\f0\\fs23\\cf1') {
+  const blocks = splitTextIntoBidiBlocksForExport(text);
+  for (const blk of blocks) {
+    if (blk.direction === 'rtl') {
+      rtf.push(
+        `\\pard\\rtlpar\\qr\\li240\\ri240\\sa140\\sl320\\slmult1\\f2\\fs26\\cf1\\b ${toRtfUnicode(
+          blk.text
+        )}\\b0\\par`
+      );
+    } else {
+      rtf.push(`${ltrHeader} ${toRtfUnicode(blk.text)}\\par`);
+    }
+  }
 }
 
 /**
@@ -150,10 +170,10 @@ export function generateOpenRtfBlob(data: LessonExportData): Blob {
     rtf.push(
       `\\pard\\sa120\\f0\\fs26\\cf2\\b ${toRtfUnicode('Exordio y Planteamiento Central')}\\b0\\par`
     );
-    rtf.push(
-      `\\pard\\sa240\\sl300\\slmult1\\f0\\fs23\\cf1 ${toRtfUnicode(
-        derasha.openingExordium
-      )}\\par`
+    pushBidiRtfProse(
+      rtf,
+      derasha.openingExordium,
+      '\\pard\\sa200\\sl300\\slmult1\\f0\\fs23\\cf1\\i'
     );
   }
 
@@ -167,9 +187,7 @@ export function generateOpenRtfBlob(data: LessonExportData): Blob {
     }
     const paragraphs = (sec.content || '').split(/\n\n+/).filter(Boolean);
     paragraphs.forEach((p) => {
-      rtf.push(
-        `\\pard\\sa180\\sl300\\slmult1\\f0\\fs23\\cf1 ${toRtfUnicode(p.trim())}\\par`
-      );
+      pushBidiRtfProse(rtf, p.trim(), '\\pard\\sa180\\sl300\\slmult1\\f0\\fs23\\cf1');
     });
     if (sec.keyInsight) {
       rtf.push(

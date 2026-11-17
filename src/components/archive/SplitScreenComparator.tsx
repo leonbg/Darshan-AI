@@ -4,6 +4,7 @@ import {
   ComparativeDerashaAnalysisResult,
   DerashaRelationType,
 } from '../../types';
+import { BidiText } from '../../utils/bidiText';
 import {
   Columns2,
   Eye,
@@ -618,11 +619,11 @@ export const SplitScreenComparator: React.FC<SplitScreenComparatorProps> = ({
                       <div className="p-2.5 rounded-xl bg-[#050912] border border-slate-800/90 text-xs text-slate-300 space-y-1">
                         <div>
                           <strong className="text-sky-300">Tesis central:</strong>{' '}
-                          {pipelineThesis.coreThesis}
+                          <BidiText text={pipelineThesis.coreThesis} />
                         </div>
                         <div className="text-[11px] text-amber-200/90">
                           <strong>Ángulo normativo/filosófico:</strong>{' '}
-                          {pipelineThesis.normativeOrPhilosophicalAngle}
+                          <BidiText text={pipelineThesis.normativeOrPhilosophicalAngle} />
                         </div>
                       </div>
                     )}
@@ -701,12 +702,17 @@ export const SplitScreenComparator: React.FC<SplitScreenComparatorProps> = ({
                               </div>
                             )}
 
-                            <p className="font-editorial text-xs sm:text-sm text-slate-100 leading-relaxed whitespace-pre-line">
-                              {seg.text}
-                            </p>
+                            <BidiText
+                              as="div"
+                              paragraphs
+                              text={seg.text}
+                              className="font-editorial text-xs sm:text-sm text-slate-100 leading-relaxed space-y-2"
+                            />
 
                             {seg.explanation && (
-                              <p
+                              <BidiText
+                                as="div"
+                                text={seg.explanation}
                                 className={`text-[11px] pt-2 border-t leading-snug ${
                                   isContra
                                     ? 'border-rose-500/25 text-rose-200/90'
@@ -714,9 +720,7 @@ export const SplitScreenComparator: React.FC<SplitScreenComparatorProps> = ({
                                     ? 'border-amber-500/25 text-amber-200/90'
                                     : 'border-sky-500/25 text-sky-200/90'
                                 }`}
-                              >
-                                {seg.explanation}
-                              </p>
+                              />
                             )}
                           </div>
                         );

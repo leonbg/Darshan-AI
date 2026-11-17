@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Compass, Copy, Check } from 'lucide-react';
 import { TheologicalKeys } from '../../types';
+import { BidiText } from '../../utils/bidiText';
 
 interface TheologicalKeysCardProps {
   keys: TheologicalKeys;
@@ -59,22 +60,29 @@ export const TheologicalKeysCard: React.FC<TheologicalKeysCardProps> = React.mem
             </button>
           </div>
 
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {textualParallelism.explanation}
-          </p>
+          <BidiText
+            as="div"
+            text={textualParallelism.explanation}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed"
+          />
 
-          <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 text-xs space-y-1">
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span className="font-semibold text-sky-400">Fuente canónica: {textualParallelism.sourceRef}</span>
-              {textualParallelism.hebrewQuote && (
-                <span dir="rtl" className="font-hebrew text-sm text-slate-200">
-                  {textualParallelism.hebrewQuote}
-                </span>
-              )}
+          <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 text-xs space-y-1.5">
+            <div className="text-slate-400 text-[11px]">
+              <span className="font-semibold text-sky-400">
+                Fuente canónica: {textualParallelism.sourceRef}
+              </span>
             </div>
-            <p className="text-slate-400 italic">
-              « {textualParallelism.connectionToPrayer} »
-            </p>
+            {textualParallelism.hebrewQuote && (
+              <p
+                dir="rtl"
+                className="font-hebrew text-sm sm:text-base text-slate-100 text-right leading-relaxed"
+              >
+                {textualParallelism.hebrewQuote}
+              </p>
+            )}
+            <div className="text-slate-400 italic">
+              « <BidiText text={textualParallelism.connectionToPrayer} /> »
+            </div>
           </div>
         </div>
 
@@ -100,21 +108,24 @@ export const TheologicalKeysCard: React.FC<TheologicalKeysCardProps> = React.mem
             </button>
           </div>
 
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {grammaticalDichotomy.explanation}
-          </p>
+          <BidiText
+            as="div"
+            text={grammaticalDichotomy.explanation}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed"
+          />
 
           <div className="p-3 rounded-lg bg-indigo-950/30 border border-indigo-500/20 text-xs space-y-1.5">
             <div className="text-indigo-300 font-semibold">
-              {grammaticalDichotomy.verbAnalysis}
+              <BidiText text={grammaticalDichotomy.verbAnalysis} />
             </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              <strong className="text-indigo-200">Implicación en la Hashkafá:</strong> {grammaticalDichotomy.watchmakerRefutation}
-            </p>
+            <div className="text-slate-300 text-[11px] leading-relaxed">
+              <strong className="text-indigo-200">Implicación en la Hashkafá:</strong>{' '}
+              <BidiText text={grammaticalDichotomy.watchmakerRefutation} />
+            </div>
             {grammaticalDichotomy.liturgicalEcho && (
-              <p className="text-indigo-300/90 text-[11px] italic">
-                Resonancia en la tradición: « {grammaticalDichotomy.liturgicalEcho} »
-              </p>
+              <div className="text-indigo-300/90 text-[11px] italic">
+                Resonancia en la tradición: « <BidiText text={grammaticalDichotomy.liturgicalEcho} /> »
+              </div>
             )}
           </div>
         </div>
@@ -141,17 +152,20 @@ export const TheologicalKeysCard: React.FC<TheologicalKeysCardProps> = React.mem
             </button>
           </div>
 
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {technicalTerm.explanation}
-          </p>
+          <BidiText
+            as="div"
+            text={technicalTerm.explanation}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed"
+          />
 
           <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-xs space-y-1">
             <div className="flex items-center justify-between text-emerald-300 text-[11px] font-semibold">
               <span>Fuente rabínica: {technicalTerm.mishnaSource}</span>
             </div>
-            <p className="text-slate-300 text-[11px]">
-              <strong className="text-emerald-200">Principio tradicional:</strong> {technicalTerm.prescribedBlessing}
-            </p>
+            <div className="text-slate-300 text-[11px]">
+              <strong className="text-emerald-200">Principio tradicional:</strong>{' '}
+              <BidiText text={technicalTerm.prescribedBlessing} />
+            </div>
           </div>
         </div>
 
@@ -177,20 +191,23 @@ export const TheologicalKeysCard: React.FC<TheologicalKeysCardProps> = React.mem
             </button>
           </div>
 
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {kabbalisticArchitecture.explanation}
-          </p>
+          <BidiText
+            as="div"
+            text={kabbalisticArchitecture.explanation}
+            className="text-xs sm:text-sm text-slate-300 leading-relaxed"
+          />
 
           <div className="p-3 rounded-lg bg-amber-950/30 border border-amber-500/20 text-xs space-y-1">
             <div className="text-amber-300 font-semibold text-[11px]">
-              {kabbalisticArchitecture.sefiraConnection}
+              <BidiText text={kabbalisticArchitecture.sefiraConnection} />
             </div>
-            <p className="text-slate-300 text-[11px]">
-              <strong className="text-amber-200">Prueba bíblica:</strong> {kabbalisticArchitecture.prooftext}
-            </p>
-            <p className="text-slate-400 text-[11px] italic">
-              Aplicación espiritual: {kabbalisticArchitecture.liturgicalStructure}
-            </p>
+            <div className="text-slate-300 text-[11px]">
+              <strong className="text-amber-200">Prueba bíblica:</strong>{' '}
+              <BidiText text={kabbalisticArchitecture.prooftext} />
+            </div>
+            <div className="text-slate-400 text-[11px] italic">
+              Aplicación espiritual: <BidiText text={kabbalisticArchitecture.liturgicalStructure} />
+            </div>
           </div>
         </div>
       </div>
