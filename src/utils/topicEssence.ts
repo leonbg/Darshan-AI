@@ -120,66 +120,6 @@ function cleanDisjunctiveOrRedundantClauses(text: string): string {
   return s;
 }
 
-export interface EssenceVariations {
-  primary: string;
-  shortLabel: string;
-  anaphoraOne: string;
-  anaphoraTwo: string;
-  anaphoraThree: string;
-  actionNoun: string;
-}
-
-/**
- * Generates varied grammatical references for a topic so essays never echo
- * the exact same long title phrase 20+ times in a row.
- */
-export function buildEssenceVariations(
-  essence: string,
-  options?: { isPostureTopic?: boolean; isGratitudeTopic?: boolean; isHalakhic?: boolean }
-): EssenceVariations {
-  if (options?.isPostureTopic) {
-    return {
-      primary: essence,
-      shortLabel: 'la postura y la inclinación (Keriá)',
-      anaphoraOne: 'esta gestualidad litúrgica',
-      anaphoraTwo: 'la reverencia corporal en la Tefilá',
-      anaphoraThree: 'el diálogo entre cuerpo y espíritu ante Hashem',
-      actionNoun: 'la inclinación consciente (Keriá)',
-    };
-  }
-
-  if (options?.isGratitudeTopic) {
-    return {
-      primary: essence,
-      shortLabel: 'la gratitud (Hakarat HaTov) y Modé Aní',
-      anaphoraOne: 'el reconocimiento agradecido (Hakarat HaTov)',
-      anaphoraTwo: 'la conciencia cotidiana de Modé Aní y Todá',
-      anaphoraThree: 'la gratitud viva ante el Creador',
-      actionNoun: 'el ejercicio diario de agradecimiento (Hodaiá)',
-    };
-  }
-
-  const trimmed = (essence || '').trim();
-  const shortFromColon = trimmed.split(':')[0].trim();
-  const shortLabel =
-    shortFromColon.length >= 10 && shortFromColon.length <= 55
-      ? lowercaseFirst(shortFromColon)
-      : trimmed.length <= 50
-      ? lowercaseFirst(trimmed)
-      : options?.isHalakhic
-      ? 'esta norma halájica'
-      : 'este principio de la Torá';
-
-  return {
-    primary: trimmed || 'Estudio de la Torá',
-    shortLabel,
-    anaphoraOne: options?.isHalakhic ? 'esta disposición del Shulján Aruj' : 'este principio ético y textual',
-    anaphoraTwo: options?.isHalakhic ? 'dicha observancia práctica' : 'esta enseñanza rabínica',
-    anaphoraThree: options?.isHalakhic ? 'el cumplimiento consciente del precepto' : 'la vivencia íntima de esta verdad',
-    actionNoun: options?.isHalakhic ? 'esta práctica halájica' : 'esta conducta consciente',
-  };
-}
-
 /**
  * Converts a natural-language question or raw query into a clean conceptual noun-phrase essence.
  */

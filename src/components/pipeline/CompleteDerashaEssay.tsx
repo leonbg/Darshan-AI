@@ -130,6 +130,8 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
   const [localMishnatQuotes, setLocalMishnatQuotes] = useState<MishnatHaDorotQuote[]>(
     activeHalakhicConsultation?.mishnatHaDorotQuotes || []
   );
+  const localMishnatQuotesRef = useRef<MishnatHaDorotQuote[]>(localMishnatQuotes);
+  localMishnatQuotesRef.current = localMishnatQuotes;
   const [isLoadingMishnat, setIsLoadingMishnat] = useState(false);
   const [mishnatError, setMishnatError] = useState<string | null>(null);
   const [selectedEraFilter, setSelectedEraFilter] = useState<HalakhicGenerationEra | 'ALL'>('ALL');
@@ -182,20 +184,18 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
           eraFilter: effectiveEra,
         });
 
-        setLocalMishnatQuotes((prev) => {
-          const mergedMap = new Map<string, MishnatHaDorotQuote>();
-          if (effectiveEra !== 'ALL' || effectiveSourceRef !== 'ALL') {
-            for (const existingItem of prev) {
-              mergedMap.set(existingItem.ref.toLowerCase(), existingItem);
-            }
+        const mergedMap = new Map<string, MishnatHaDorotQuote>();
+        if (effectiveEra !== 'ALL' || effectiveSourceRef !== 'ALL') {
+          for (const existingItem of localMishnatQuotesRef.current) {
+            mergedMap.set(existingItem.ref.toLowerCase(), existingItem);
           }
-          for (const newItem of result.quotes || []) {
-            mergedMap.set(newItem.ref.toLowerCase(), newItem);
-          }
-          const combined = sortMishnatHaDorotChronologically(Array.from(mergedMap.values()));
-          onSaveMishnatHaDorotQuotes?.(combined);
-          return combined;
-        });
+        }
+        for (const newItem of result.quotes || []) {
+          mergedMap.set(newItem.ref.toLowerCase(), newItem);
+        }
+        const combined = sortMishnatHaDorotChronologically(Array.from(mergedMap.values()));
+        setLocalMishnatQuotes(combined);
+        onSaveMishnatHaDorotQuotes?.(combined);
       } catch (err: any) {
         setMishnatError(
           err?.message || 'No se pudieron recuperar dictámenes de Mishnat HaDorot.'

@@ -14,6 +14,7 @@ import {
   Search,
   X,
   RotateCcw,
+  HelpCircle,
 } from 'lucide-react';
 import { User } from '../../services/firebase';
 import { ArchivedDerashaEntry } from '../../types';
@@ -22,6 +23,7 @@ export type WorkspaceTab = 'estudio' | 'calendario' | 'archivo' | 'todo';
 
 interface HeaderProps {
   onOpenAboutModal: () => void;
+  onOpenUserManualModal?: () => void;
   onOpenSettingsModal?: () => void;
   onNavigateSection?: (target: 'study' | 'archive' | 'topics' | 'musar') => void;
   archivedCount?: number;
@@ -46,6 +48,7 @@ interface HeaderProps {
 
 const HeaderComponent: React.FC<HeaderProps> = ({
   onOpenAboutModal,
+  onOpenUserManualModal,
   onOpenSettingsModal,
   onNavigateSection,
   archivedCount = 8,
@@ -144,7 +147,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
         </a>
 
         {/* Zone 2: Navigation Links (single-line, generous spacing) */}
-        <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-400">
+        <nav className="hidden md:flex items-center gap-3.5 lg:gap-5 text-xs font-medium text-slate-400">
           <button
             type="button"
             onClick={() => onNavigateSection?.('study')}
@@ -400,11 +403,29 @@ const HeaderComponent: React.FC<HeaderProps> = ({
             type="button"
             onClick={onOpenAboutModal}
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            title="Metodología de estudio en 4 niveles (Pshat, Remez, Drash, Sod)"
+            title="Guía de Metodologías: PARDÉS (4 niveles) y las demás metodologías de estudio"
           >
             <BookOpen className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden lg:inline">Guía Pardés</span>
+            <span className="hidden lg:inline">Metodologías</span>
           </button>
+
+          {onOpenUserManualModal && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsHistoryMenuOpen(false);
+                setIsProfileMenuOpen(false);
+                onOpenUserManualModal();
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-400 hover:bg-sky-300 text-slate-950 border border-sky-300 shadow-[0_0_16px_-4px_rgba(56,189,248,0.65)] text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer"
+              title="Abrir Manual de Usuario y Atajos de Teclado (? o F1)"
+              aria-label="Abrir Manual de Usuario"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+              <span>Manual</span>
+              <span className="hidden xl:inline">de Usuario</span>
+            </button>
+          )}
 
           {onOpenSettingsModal && (
             <button

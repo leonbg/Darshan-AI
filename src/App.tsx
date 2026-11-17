@@ -16,6 +16,9 @@ import type { HubTab } from './components/discovery/SuggestedTopicsHub';
 const AboutModal = lazy(() =>
   import('./components/layout/AboutModal').then((m) => ({ default: m.AboutModal }))
 );
+const UserManualModal = lazy(() =>
+  import('./components/layout/UserManualModal').then((m) => ({ default: m.UserManualModal }))
+);
 const ExportModal = lazy(() =>
   import('./components/layout/ExportModal').then((m) => ({ default: m.ExportModal }))
 );
@@ -102,6 +105,7 @@ export default function App() {
 
   // Modal states
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [isUserManualOpen, setIsUserManualOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsModalTab>('typography');
@@ -569,6 +573,8 @@ export default function App() {
   // Stable UI & Modal Callbacks
   const handleOpenAboutModal = useCallback(() => setIsAboutModalOpen(true), []);
   const handleCloseAboutModal = useCallback(() => setIsAboutModalOpen(false), []);
+  const handleOpenUserManualModal = useCallback(() => setIsUserManualOpen(true), []);
+  const handleCloseUserManualModal = useCallback(() => setIsUserManualOpen(false), []);
   const handleCloseExportModal = useCallback(() => setIsExportModalOpen(false), []);
   const handleOpenSettingsModal = useCallback(() => {
     setSettingsInitialTab('typography');
@@ -582,6 +588,37 @@ export default function App() {
   const handleOpenExportWithScope = useCallback((scope: ExportScope) => {
     setExportScope(scope);
     setIsExportModalOpen(true);
+  }, []);
+
+  // Global Keyboard Shortcuts: ? or F1 opens Help Manual outside text inputs; Escape closes active modals
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsUserManualOpen(false);
+        setIsAboutModalOpen(false);
+        setIsExportModalOpen(false);
+        setIsSettingsModalOpen(false);
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toUpperCase();
+      const isTyping =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        Boolean(target?.isContentEditable);
+
+      if (isTyping) return;
+
+      if (event.key === 'F1' || (event.key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey)) {
+        event.preventDefault();
+        setIsUserManualOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
   const handleToggleAtrilConfig = useCallback(() => {
@@ -627,6 +664,7 @@ export default function App() {
     cancelPendingDriveAction();
 
     setIsAboutModalOpen(false);
+    setIsUserManualOpen(false);
     setIsExportModalOpen(false);
     setIsSettingsModalOpen(false);
 
@@ -1594,6 +1632,7 @@ export default function App() {
       {/* Top Header (3-Zone Contract + History Button + Gear Settings + Discreet Google Profile & Drive Icon) */}
       <Header
         onOpenAboutModal={handleOpenAboutModal}
+        onOpenUserManualModal={handleOpenUserManualModal}
         onOpenSettingsModal={handleOpenSettingsModal}
         onNavigateSection={handleNavigateSection}
         archivedCount={derashotArchive.length}
@@ -1661,15 +1700,13 @@ export default function App() {
           lessonElaborationBudgetSeconds={lessonElaborationBudgetSeconds}
           onFanOpenChange={setIsMethodologyFanOpen}
           archivedEntries={derashotArchive}
-          onOpenArchivedDerasha={handleOpenArchivedDerasha}
-          onDeleteArchivedDerasha={deleteArchivedDerasha}
-          onOpenFullArchive={handleQuickOpenArchive}
           onRequestClarification={handleRequestClarificationFromInput}
           onRunCrossComparison={handleRunCrossComparisonFromInput}
           onReturnHome={handleReturnToHome}
           homeResetSignal={homeResetSignal}
           isHomeTapArmed={isHomeTapArmed}
           onClearOrReturnHome={handleClearOrDoubleTapHome}
+          onOpenUserManualModal={handleOpenUserManualModal}
         />
 
         {/* AVISO DE ACLARACIÓN DE CONSULTA O ESPERA MUY LARGA */}
@@ -1838,13 +1875,21 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-[#090f1d] py-8 text-center text-xs text-slate-500">
-        <div className="max-w-6xl mx-auto px-4 space-y-1.5">
-          <p className="flex items-center justify-center gap-2 text-slate-400 font-medium">
+        <div className="max-w-6xl mx-auto px-4 space-y-2">
+          <p className="flex flex-wrap items-center justify-center gap-2 text-slate-400 font-medium">
             <span className="font-editorial text-slate-200">Darshán AI</span>
             <span>·</span>
             <span>Metodología Pardés</span>
             <span>·</span>
             <span className="font-hebrew text-sky-400">פְּשָׁט · רֶמֶז · דְּרַשׁ · סוֹד</span>
+            <span>·</span>
+            <button
+              type="button"
+              onClick={handleOpenUserManualModal}
+              className="text-sky-300 hover:text-sky-200 underline underline-offset-4 font-semibold cursor-pointer"
+            >
+              Manual de Usuario (?)
+            </button>
           </p>
           <p className="text-slate-500">
             Fuentes hebraicas canónicas sincronizadas con la Biblioteca de Sefaria · Tradición Judía Clásica
@@ -1858,6 +1903,14 @@ export default function App() {
           <AboutModal
             isOpen={isAboutModalOpen}
             onClose={handleCloseAboutModal}
+          />
+        )}
+
+        {isUserManualOpen && (
+          <UserManualModal
+            isOpen={isUserManualOpen}
+            onClose={handleCloseUserManualModal}
+            onOpenAboutModal={handleOpenAboutModal}
           />
         )}
 
@@ -1897,6 +1950,7 @@ export default function App() {
             comparativeCount={comparativeStudies.length}
             activeStudyTitle={activeStudyTitle}
             onOpenAboutModal={handleOpenAboutModal}
+            onOpenUserManualModal={handleOpenUserManualModal}
           />
         )}
       </Suspense>

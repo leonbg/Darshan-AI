@@ -17,6 +17,7 @@ import {
   AlignLeft,
   AlignRight,
   BookOpen,
+  HelpCircle,
 } from 'lucide-react';
 import { AtrilReadingScale, AtrilTypographyPreset } from '../../hooks/useAtrilPreferences';
 import { SystemSafePointSnapshot } from '../../types';
@@ -60,6 +61,7 @@ interface SettingsModalProps {
   comparativeCount: number;
   activeStudyTitle?: string;
   onOpenAboutModal: () => void;
+  onOpenUserManualModal?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -84,6 +86,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   comparativeCount,
   activeStudyTitle,
   onOpenAboutModal,
+  onOpenUserManualModal,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsModalTab>(initialTab);
   const [customLabel, setCustomLabel] = useState('');
@@ -713,11 +716,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span>Documentación Metodológica e Instalación Local</span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Consulta la guía de exégesis PARDÉS y el flujo antialucinación de 3 fases, o instala la aplicación en tu dispositivo.
+                    Consulta la guía completa de metodologías (PARDÉS y los otros 6 enfoques) y el flujo antialucinación de 3 fases, o instala la aplicación en tu dispositivo.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <PWAInstallButton />
+                  {onOpenUserManualModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenUserManualModal();
+                      }}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-200 text-xs font-medium transition cursor-pointer"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Manual de Usuario</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -727,7 +743,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium transition cursor-pointer"
                   >
                     <BookOpen className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Abrir Guía Pardés</span>
+                    <span>Guía de Metodologías</span>
                   </button>
                 </div>
               </div>

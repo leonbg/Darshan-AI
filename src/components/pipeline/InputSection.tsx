@@ -24,9 +24,7 @@ import {
   Clock,
   PlusCircle,
   CheckCircle2,
-  History,
-  Trash2,
-  FileText,
+  HelpCircle,
 } from 'lucide-react';
 import {
   DerashaMethodology,
@@ -76,9 +74,6 @@ interface InputSectionProps {
   lessonElaborationBudgetSeconds?: number;
   onFanOpenChange?: (isOpen: boolean) => void;
   archivedEntries?: ArchivedDerashaEntry[];
-  onOpenArchivedDerasha?: (entry: ArchivedDerashaEntry) => void;
-  onDeleteArchivedDerasha?: (sequenceNumber: number) => void;
-  onOpenFullArchive?: () => void;
   onRequestClarification?: () => void;
   onRunCrossComparison?: (params: {
     numbers: number[];
@@ -89,6 +84,7 @@ interface InputSectionProps {
   homeResetSignal?: number;
   isHomeTapArmed?: boolean;
   onClearOrReturnHome?: () => void;
+  onOpenUserManualModal?: () => void;
 }
 
 export const METHODOLOGY_OPTIONS: Array<{
@@ -203,21 +199,17 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
   lessonElaborationBudgetSeconds = 150,
   onFanOpenChange,
   archivedEntries = [],
-  onOpenArchivedDerasha,
-  onDeleteArchivedDerasha,
-  onOpenFullArchive,
   onRequestClarification,
   onRunCrossComparison,
   onReturnHome,
   homeResetSignal = 0,
   isHomeTapArmed: isHomeTapArmedProp,
   onClearOrReturnHome,
+  onOpenUserManualModal,
 }) => {
   // Collapsed by default so the UI stays clean and uncluttered
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
   const [showGateDetails, setShowGateDetails] = useState<boolean>(false);
-  const [isQuickHistoryOpen, setIsQuickHistoryOpen] = useState<boolean>(false);
-  const [confirmDeleteSeq, setConfirmDeleteSeq] = useState<number | null>(null);
   const [localHomeTapArmed, setLocalHomeTapArmed] = useState<boolean>(false);
   const lastClearTapAtRef = useRef<number>(0);
   const clearArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -234,10 +226,8 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
 
   useEffect(() => {
     if (homeResetSignal > 0) {
-      setIsQuickHistoryOpen(false);
       setIsConfigOpen(false);
       setShowGateDetails(false);
-      setConfirmDeleteSeq(null);
       setLocalHomeTapArmed(false);
       lastClearTapAtRef.current = 0;
       onFanOpenChange?.(false);
@@ -261,10 +251,8 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
     if (isSecondTap) {
       lastClearTapAtRef.current = 0;
       setLocalHomeTapArmed(false);
-      setIsQuickHistoryOpen(false);
       setIsConfigOpen(false);
       setShowGateDetails(false);
-      setConfirmDeleteSeq(null);
       onFanOpenChange?.(false);
       onChangeQuery('');
       onReturnHome?.();
@@ -500,27 +488,23 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setIsQuickHistoryOpen((prev) => !prev);
-                setConfirmDeleteSeq(null);
-              }}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition cursor-pointer ${
-                isQuickHistoryOpen
-                  ? 'bg-amber-500/15 text-amber-200 border-amber-400/50'
-                  : 'bg-slate-900/90 text-slate-300 border-slate-800 hover:text-white hover:border-amber-400/40'
-              }`}
-              title="Abrir historial de Derashot anteriores para consultarlas o eliminar las que no sean de interés"
-            >
-              <History className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Historial ({archivedEntries.length})</span>
-            </button>
+            {onOpenUserManualModal && (
+              <button
+                type="button"
+                onClick={onOpenUserManualModal}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/50 text-amber-200 hover:text-white text-xs font-semibold transition cursor-pointer whitespace-nowrap"
+                title="Abrir el Manual de Usuario paso a paso (atajo: ? o F1)"
+                aria-label="Abrir Manual de Usuario"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <span>Manual de Usuario</span>
+              </button>
+            )}
 
             <button
               type="button"
               onClick={onToggleRtl}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer whitespace-nowrap ${
                 isRtl
                   ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
                   : 'bg-slate-900/90 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
@@ -536,153 +520,6 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
             </button>
           </div>
         </div>
-
-        {/* Inline Quick History Drawer when user clicks the Historial button */}
-        {isQuickHistoryOpen && (
-          <div className="p-3.5 rounded-xl bg-[#060c18] border border-amber-500/35 space-y-2.5 text-xs">
-            <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="font-bold text-white">
-                  Historial de Derashot Anteriores ({archivedEntries.length})
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                {onOpenFullArchive && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsQuickHistoryOpen(false);
-                      onOpenFullArchive();
-                    }}
-                    className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 cursor-pointer"
-                  >
-                    Ir al Comparador Completo →
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setIsQuickHistoryOpen(false)}
-                  className="text-slate-400 hover:text-white cursor-pointer"
-                  title="Cerrar historial rápido"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {archivedEntries.length === 0 ? (
-              <p className="text-slate-400 py-3 text-center">
-                Aún no hay Derashot guardadas en el historial.
-              </p>
-            ) : (
-              <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
-                {[...archivedEntries]
-                  .sort((a, b) => b.sequenceNumber - a.sequenceNumber)
-                  .map((entry) => {
-                    const isConfirming = confirmDeleteSeq === entry.sequenceNumber;
-                    return (
-                      <div
-                        key={entry.id}
-                        className="p-2.5 rounded-lg bg-[#0b1326] border border-slate-800/90 hover:border-slate-700 transition space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsQuickHistoryOpen(false);
-                              if (onOpenArchivedDerasha) {
-                                onOpenArchivedDerasha(entry);
-                              } else {
-                                onChangeQuery(entry.query);
-                              }
-                            }}
-                            className="text-left min-w-0 flex-1 group cursor-pointer"
-                          >
-                            <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                              <span className="font-mono font-bold text-sky-400">
-                                Derashá #{entry.sequenceNumber}
-                              </span>
-                              <span>·</span>
-                              <span>{entry.methodology}</span>
-                            </div>
-                            <p className="font-semibold text-slate-100 group-hover:text-sky-300 truncate mt-0.5">
-                              {entry.title}
-                            </p>
-                          </button>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsQuickHistoryOpen(false);
-                                if (onOpenArchivedDerasha) {
-                                  onOpenArchivedDerasha(entry);
-                                } else {
-                                  onChangeQuery(entry.query);
-                                }
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-[11px] font-semibold text-sky-200 transition cursor-pointer"
-                            >
-                              <FileText className="w-3 h-3" />
-                              <span>Abrir</span>
-                            </button>
-
-                            {onDeleteArchivedDerasha && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setConfirmDeleteSeq(
-                                    isConfirming ? null : entry.sequenceNumber
-                                  )
-                                }
-                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition cursor-pointer ${
-                                  isConfirming
-                                    ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
-                                    : 'bg-slate-900 hover:bg-rose-950/50 border-slate-800 hover:border-rose-500/40 text-slate-400 hover:text-rose-300'
-                                }`}
-                                title="Eliminar esta Derashá del histórico"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span className="hidden sm:inline">Eliminar</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {isConfirming && onDeleteArchivedDerasha && (
-                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-rose-500/30 text-[11px]">
-                            <span className="text-rose-200 font-medium">
-                              ¿Eliminar Derashá #{entry.sequenceNumber} del histórico?
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteSeq(null)}
-                                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmDeleteSeq(null);
-                                  onDeleteArchivedDerasha(entry.sequenceNumber);
-                                }}
-                                className="px-2.5 py-0.5 rounded bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold cursor-pointer"
-                              >
-                                Sí, eliminar
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Highlighted Main Input Box with Integrated Clear / Double-Tap Home Button */}
         <div className="relative">
@@ -952,33 +789,6 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
                 )}
               </>
             )}
-
-            <button
-              type="button"
-              onClick={handleClearOrDoubleTapHome}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer select-none ${
-                isHomeTapArmed
-                  ? 'bg-amber-400 border-amber-300 text-slate-950 shadow-[0_0_16px_-4px_rgba(251,191,36,0.65)]'
-                  : 'bg-slate-800/95 hover:bg-slate-700 border-slate-600/80 hover:border-sky-400/60 text-slate-100 hover:text-white'
-              }`}
-              title="1 toque: limpiar recuadro de consulta · 2 toques: volver al inicio de la aplicación (cierra historial o cualquier sección)"
-              aria-label="Limpiar consulta o tocar dos veces para volver al inicio de la aplicación"
-            >
-              {isHomeTapArmed ? (
-                <>
-                  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                  <span>2º toque: Inicio</span>
-                </>
-              ) : (
-                <>
-                  <X className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                  <span>Limpiar</span>
-                  <span className="hidden sm:inline text-[10px] text-slate-300 font-normal">
-                    · 2× Inicio
-                  </span>
-                </>
-              )}
-            </button>
 
             <button
               type="button"

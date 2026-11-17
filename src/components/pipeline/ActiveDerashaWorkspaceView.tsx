@@ -104,12 +104,12 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
       [onOpenExportWithScope]
     );
     const handleOpenPardesExport = useCallback(
-      () => onOpenExportWithScope('full_derasha'),
+      () => onOpenExportWithScope('pardes_cards'),
       [onOpenExportWithScope]
     );
     const handleOpenCurrentViewExport = useCallback(
-      () => onOpenExportWithScope('full_derasha'),
-      [onOpenExportWithScope]
+      () => onOpenExportWithScope(viewMode === 'cards' ? 'pardes_cards' : 'full_derasha'),
+      [onOpenExportWithScope, viewMode]
     );
 
     const handleAskFollowUpPrompt = useCallback(
