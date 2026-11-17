@@ -10,6 +10,7 @@ import {
   DerashaMethodology,
   DerashaDuration,
   DerashaTone,
+  DerashaOutputPreferences,
   MethodologyDeliberationResult,
   HalakhicGenerationEra,
   MishnatHaDorotQuote,
@@ -350,6 +351,8 @@ export async function requestPhase3Derasha(
     duracion?: DerashaDuration;
     audiencia_o_tono?: string;
     tono_homiletico?: DerashaTone;
+    preferencias_salida?: DerashaOutputPreferences;
+    outputPreferences?: DerashaOutputPreferences;
     title: string;
     primaryHebrew: string;
     transliteration: string;

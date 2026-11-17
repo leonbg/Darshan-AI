@@ -1,6 +1,7 @@
 import {
   DerashaDuration,
   DerashaMethodology,
+  DerashaOutputPreferences,
   DerashaTone,
   FinalDerasha,
   Phase1AnalysisResult,
@@ -54,6 +55,7 @@ export interface Phase3DerashaSynthesisParams {
   duracion: DerashaDuration;
   audienciaOTono: string;
   tonoHomiletico?: DerashaTone;
+  outputPreferences?: DerashaOutputPreferences;
   phase1Data: Phase1AnalysisResult;
   verifiedSources: VerifiedSefariaSource[];
   fallbackThinkerDetection?: Phase1AnalysisResult['externalThinkerDetection'];

@@ -46,6 +46,7 @@ import {
   useArchiveAndComparator,
   buildSyntheticStudyFromArchivedEntry,
   useSafePoints,
+  useDerashaOutputPreferences,
 } from './hooks';
 import { SampleQuery } from './data/samples';
 import {
@@ -86,6 +87,10 @@ import {
   MishnatHaDorotQuote,
 } from './types';
 import { composeAudienceAndTone } from './utils/toneAdvisor';
+import {
+  areOutputPreferencesEqual,
+  DEFAULT_DERASHA_OUTPUT_PREFERENCES,
+} from './utils/outputPreferences';
 import { AlertTriangle, ShieldCheck, RotateCcw, HardDrive, RefreshCw, X } from 'lucide-react';
 import { clearLocalAppStorageForDriveMode } from './services';
 
@@ -133,6 +138,17 @@ export default function App() {
     typographyClass,
     scaleClass,
   } = useAtrilPreferences();
+
+  // Custom Hook: PARDES Output Depth, Level Priority & Final Conclusion Length
+  const {
+    outputPreferences,
+    setOutputPreferences,
+    setPardesLevelDepth,
+    applyAllPardesDepth,
+    togglePrioritizedPardesLevel,
+    setConclusionLength,
+    resetOutputPreferences,
+  } = useDerashaOutputPreferences();
 
   // Custom Hook: Live Hebrew & Liturgical Calendar
   const { calendarData, isLoadingCalendar, loadCalendar } = useTorahCalendar();
@@ -223,6 +239,7 @@ export default function App() {
     metodologiasComplementarias,
     audienciaOTono,
     tonoHomiletico,
+    outputPreferences,
     calendarData,
     phase1Data,
     verifiedSources,
@@ -243,6 +260,7 @@ export default function App() {
     metodologiasComplementarias,
     audienciaOTono,
     tonoHomiletico,
+    outputPreferences,
     calendarData,
     phase1Data,
     verifiedSources,
@@ -322,6 +340,11 @@ export default function App() {
           }
           if (parsed.audienciaOTono) setAudienciaOTono(parsed.audienciaOTono);
           if (parsed.tonoHomiletico) setTonoHomiletico(parsed.tonoHomiletico);
+          if (parsed.outputPreferences) {
+            setOutputPreferences(parsed.outputPreferences);
+          } else if (parsed.finalDerasha?.outputPreferences) {
+            setOutputPreferences(parsed.finalDerasha.outputPreferences);
+          }
           setPhase1Data(parsed.phase1Data);
           setVerifiedSources(Array.isArray(parsed.verifiedSources) ? parsed.verifiedSources : []);
           setFinalDerasha(parsed.finalDerasha);
@@ -333,7 +356,7 @@ export default function App() {
     } catch {
       // ignore storage errors
     }
-  }, []);
+  }, [setOutputPreferences]);
 
   // Persist completed study in localStorage, save/update in the numbered Derashot Archive, and refresh Auto Safe Point
   useEffect(() => {
@@ -352,6 +375,7 @@ export default function App() {
         metodologiasComplementarias,
         audienciaOTono,
         tonoHomiletico,
+        outputPreferences: finalDerasha.outputPreferences || outputPreferences,
         phase1Data,
         verifiedSources,
         finalDerasha,
@@ -1169,6 +1193,7 @@ export default function App() {
           metodologiasComplementarias: effectivePipelineComplementary,
           audienciaOTono: st.audienciaOTono,
           tonoHomiletico: effectivePipelineTone,
+          outputPreferences: st.outputPreferences,
           prewarmedCache: st.prewarmedCache,
           inFlightPrewarmPromise: inFlightPrewarmForQuery,
           signal: pipelineController.signal,
@@ -1354,6 +1379,7 @@ export default function App() {
           extraMethodology,
           audienciaOTono: st.audienciaOTono,
           tonoHomiletico: st.tonoHomiletico,
+          outputPreferences: st.outputPreferences,
           phase1Data: st.phase1Data,
           verifiedSources: st.verifiedSources,
         });
@@ -1382,6 +1408,48 @@ export default function App() {
     },
     []
   );
+
+  // Dynamically re-synthesize Phase 3 when the user applies updated PARDES depth/priority/conclusion preferences on an active study
+  const handleResynthesizeOutputPreferences = useCallback(async () => {
+    const st = latestStateRef.current;
+    if (!st.phase1Data || !st.finalDerasha) return;
+
+    const activeStudyQuery = st.completedStudyQuery || st.query;
+    const primaryMetodologia: DerashaMethodology =
+      st.finalDerasha.metodologia || st.phase1Data.detectedMetodologia || st.metodologia;
+    const targetDuration: DerashaDuration = st.finalDerasha.duracion || st.duracion;
+    const currentComp =
+      st.finalDerasha.metodologiasComplementarias || st.metodologiasComplementarias;
+
+    setIsRegeneratingDuration(true);
+    setErrorMessage(null);
+
+    try {
+      const { finalDerasha: updatedDerasha, enrichedSources } =
+        await executeDurationOrComplementaryResynthesis({
+          activeStudyQuery,
+          primaryMetodologia,
+          currentComplementary: currentComp,
+          newDuration: targetDuration,
+          audienciaOTono: st.audienciaOTono,
+          tonoHomiletico: st.tonoHomiletico,
+          outputPreferences: st.outputPreferences,
+          phase1Data: st.phase1Data,
+          verifiedSources: st.verifiedSources,
+        });
+
+      setFinalDerasha(updatedDerasha);
+      setVerifiedSources(enrichedSources);
+    } catch (err: any) {
+      console.warn('Warning regenerating with output preferences:', err);
+      setErrorMessage(
+        err.message ||
+          'No se pudo aplicar la personalización PARDÉS y de conclusión en este momento.'
+      );
+    } finally {
+      setIsRegeneratingDuration(false);
+    }
+  }, []);
 
   // Follow-up question to expand a point
   const handleAskFollowUp = useCallback(
@@ -1743,6 +1811,12 @@ export default function App() {
           onOpenUserManualModal={handleOpenUserManualModal}
           collapseFanSignal={collapseFanSignal}
           isEvaluatingQuery={isPreparingGeneration && !isLoading}
+          outputPreferences={outputPreferences}
+          onChangePardesDepth={setPardesLevelDepth}
+          onTogglePrioritizedPardesLevel={togglePrioritizedPardesLevel}
+          onChangeConclusionLength={setConclusionLength}
+          onApplyAllPardesDepth={applyAllPardesDepth}
+          onResetOutputPreferences={resetOutputPreferences}
         />
 
         {/* Error notification directly below InputSection so it is immediately visible */}
@@ -1866,6 +1940,13 @@ export default function App() {
               onTranslateAllSources={handleTranslateAllSources}
               onRequestMasterReadings={handleRequestMasterReadings}
               onSaveMishnatHaDorotQuotes={handleSaveMishnatHaDorotQuotes}
+              outputPreferences={outputPreferences}
+              onChangePardesDepth={setPardesLevelDepth}
+              onTogglePrioritizedPardesLevel={togglePrioritizedPardesLevel}
+              onChangeConclusionLength={setConclusionLength}
+              onApplyAllPardesDepth={applyAllPardesDepth}
+              onResetOutputPreferences={resetOutputPreferences}
+              onRegenerateWithOutputPreferences={handleResynthesizeOutputPreferences}
             />
           </Suspense>
         )}
@@ -2018,6 +2099,23 @@ export default function App() {
             activeStudyTitle={activeStudyTitle}
             onOpenAboutModal={handleOpenAboutModal}
             onOpenUserManualModal={handleOpenUserManualModal}
+            outputPreferences={outputPreferences}
+            onChangePardesDepth={setPardesLevelDepth}
+            onTogglePrioritizedPardesLevel={togglePrioritizedPardesLevel}
+            onChangeConclusionLength={setConclusionLength}
+            onApplyAllPardesDepth={applyAllPardesDepth}
+            onResetOutputPreferences={resetOutputPreferences}
+            onApplyAndRegenerateActiveStudy={
+              finalDerasha && phase1Data ? handleResynthesizeOutputPreferences : undefined
+            }
+            isRegeneratingActiveStudy={isRegeneratingDuration}
+            hasUnsavedOutputChanges={
+              Boolean(finalDerasha) &&
+              !areOutputPreferencesEqual(
+                outputPreferences,
+                finalDerasha?.outputPreferences || DEFAULT_DERASHA_OUTPUT_PREFERENCES
+              )
+            }
           />
         )}
       </Suspense>

@@ -15,6 +15,8 @@ import {
   subscribeToFirestoreArchive,
   syncDerashaEntryToFirestore,
   deleteDerashaFromFirestore,
+  buildDerashaFirestoreDocId,
+  clearKnownFirestoreCache,
   mergeArchiveEntriesSafely,
   recordDeletedDerasha,
 } from '../services/archiveService';
@@ -228,26 +230,39 @@ export function useArchiveAndComparator() {
           unsubscribeSnapshot = null;
         }
         if (user && user.emailVerified) {
-          const currentLocal = archiveRef.current;
-          currentLocal.forEach((entry) => {
-            syncDerashaEntryToFirestore(entry).catch(() => {});
-          });
-
-          unsubscribeSnapshot = subscribeToFirestoreArchive(user.uid, (remoteEntries) => {
-            setDerashotArchive((prev) => {
-              const merged = mergeArchiveEntriesSafely(prev, remoteEntries);
-              if (!token) {
-                saveLocalArchive(merged);
+          let initialMissingSeedSyncDone = false;
+          unsubscribeSnapshot = subscribeToFirestoreArchive(
+            user.uid,
+            (remoteEntries, remoteDocIds) => {
+              if (remoteEntries.length > 0) {
+                setDerashotArchive((prev) => {
+                  const merged = mergeArchiveEntriesSafely(prev, remoteEntries);
+                  if (!token) {
+                    saveLocalArchive(merged);
+                  }
+                  return merged;
+                });
               }
-              return merged;
-            });
-          });
+
+              if (!initialMissingSeedSyncDone) {
+                initialMissingSeedSyncDone = true;
+                const currentLocal = archiveRef.current;
+                currentLocal.forEach((entry) => {
+                  const expectedDocId = buildDerashaFirestoreDocId(user.uid, entry.sequenceNumber);
+                  if (!remoteDocIds.has(expectedDocId)) {
+                    syncDerashaEntryToFirestore(entry).catch(() => {});
+                  }
+                });
+              }
+            }
+          );
         }
         if (token) {
           syncWithGoogleDriveNow();
         }
       },
       () => {
+        clearKnownFirestoreCache();
         setFirebaseUser(null);
         setDriveAccessToken(null);
         resetDriveFolderCache();
@@ -420,6 +435,7 @@ export function useArchiveAndComparator() {
   const signOutGoogle = useCallback(async () => {
     try {
       await signOutFirebase();
+      clearKnownFirestoreCache();
       setFirebaseUser(null);
       setDriveAccessToken(null);
       resetDriveFolderCache();

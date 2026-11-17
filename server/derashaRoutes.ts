@@ -19,6 +19,11 @@ import {
   sanitizeDerashaQuotedQuestions,
 } from '../src/utils/topicEssence.ts';
 import {
+  normalizeDerashaOutputPreferences,
+  serializeOutputPreferencesKey,
+  summarizeOutputPreferencesEs,
+} from '../src/utils/outputPreferences.ts';
+import {
   getGenAIClient,
   GEMINI_HYDROGEN_MODEL,
   logPipelineGeminiDiagnostic,
@@ -42,6 +47,7 @@ import {
   resolveComplementaryMethodologies,
   getDurationAndComplementaryInstructions,
   getMethodologyInstructions,
+  getOutputPreferencesInstructions,
 } from './methodologyPrompts.ts';
 import {
   normalizeMethodologySections,
@@ -63,6 +69,8 @@ export function registerDerashaRoutes(app: Express) {
       duracion: rawDuracion,
       audiencia_o_tono,
       tono_homiletico,
+      preferencias_salida,
+      outputPreferences: bodyOutputPreferences,
       title,
       primaryHebrew,
       transliteration,
@@ -119,7 +127,12 @@ export function registerDerashaRoutes(app: Express) {
         )
       : audiencia_o_tono || 'Comunidad general · Inspirador y práctico';
 
-    const derashaCacheKey = `${query.toLowerCase()}|${metodologia}|${duracion}|${complementaryMethodologies.join(',')}|${audienciaOTono}|${toneEval.resolvedTone}`;
+    const outputPreferences = normalizeDerashaOutputPreferences(
+      preferencias_salida || bodyOutputPreferences
+    );
+    const outputPreferencesKey = serializeOutputPreferencesKey(outputPreferences);
+
+    const derashaCacheKey = `${query.toLowerCase()}|${metodologia}|${duracion}|${complementaryMethodologies.join(',')}|${audienciaOTono}|${toneEval.resolvedTone}|${outputPreferencesKey}`;
     const cachedDerasha = derashaMemoryCache.get(derashaCacheKey);
     if (cachedDerasha) {
       return res.json({
@@ -192,6 +205,10 @@ export function registerDerashaRoutes(app: Express) {
           duracion,
           complementaryMethodologies
         );
+        const outputPreferencesRules = getOutputPreferencesInstructions(
+          outputPreferences,
+          metodologia
+        );
 
         const comparativePromptSection = halakhicValidation.externalPhilosophyInjectionDisabled
           ? `REGLA HALÁJICA ESTRICTA — MÓDULO DEL SHULJÁN ARUJ (OMISIÓN TOTAL DE FILOSOFÍA EXTERNA):
@@ -245,6 +262,8 @@ ${comparativePromptSection}
 ${methodologyRules}
 
 ${durationAndComplementaryRules}
+
+${outputPreferencesRules}
 
 ${veracitySourcesInstruction}
 
@@ -309,6 +328,7 @@ SALIDA OBLIGATORIA:
 5. "metodologias_complementarias": ${JSON.stringify(complementaryMethodologies)}
 6. "duracion": "${duracion}"
 7. "audiencia_o_tono": "${audienciaOTono}"
+8. "personalizacion_pardes_y_conclusion": "${summarizeOutputPreferencesEs(outputPreferences)}"
 
 Datos filológicos y fuentes verificadas de apoyo:
 - Título conceptual sugerido: ${effectiveTitle}
@@ -464,6 +484,7 @@ Genera la respuesta en formato JSON conforme al esquema definido.`;
         parsed.tonoHomiletico = toneEval.requestedTone;
         parsed.resolvedTone = toneEval.resolvedTone;
         parsed.toneAdvisory = toneEval.advisoryReason;
+        parsed.outputPreferences = outputPreferences;
         parsed.halakhicValidation = halakhicValidation;
         if (halakhicConsultation.active) {
           parsed.halakhicConsultation = enrichHalakhicConsultationWithVerifiedSources(

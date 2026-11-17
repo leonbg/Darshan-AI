@@ -1,4 +1,9 @@
 import { normalizeUserStudyQuery } from './queryNormalization.ts';
+import {
+  hasCustomOutputPreferences,
+  summarizeOutputPreferencesEs,
+} from '../src/utils/outputPreferences.ts';
+import type { PardesLevelKey } from '../src/types.ts';
 
 export function normalizeMethodologySections(
   metodologia: string,
@@ -359,10 +364,17 @@ export function synthesizeContinuousDerashaMarkdown(params: {
 
   parts.push(`# ${derasha?.derashaTitle || title || query}`);
 
+  const customSummaryLine =
+    derasha?.outputPreferences && hasCustomOutputPreferences(derasha.outputPreferences)
+      ? `  \n> *Personalización de salida:* ${summarizeOutputPreferencesEs(derasha.outputPreferences)}`
+      : '';
+
   if (primaryHebrew) {
     parts.push(
-      `> **${primaryHebrew}**  \n> *(${transliteration || ''})* — «${literalSpanishTranslation || ''}»  \n> *Contexto:* ${liturgicalContext || 'Tradición Rabínica'} · *Metodología:* ${metodologia} · *Enfoque:* ${audienciaOTono}`
+      `> **${primaryHebrew}**  \n> *(${transliteration || ''})* — «${literalSpanishTranslation || ''}»  \n> *Contexto:* ${liturgicalContext || 'Tradición Rabínica'} · *Metodología:* ${metodologia} · *Enfoque:* ${audienciaOTono}${customSummaryLine}`
     );
+  } else if (customSummaryLine) {
+    parts.push(`> *Metodología:* ${metodologia} · *Enfoque:* ${audienciaOTono}${customSummaryLine}`);
   }
 
   parts.push(`\n---\n`);
@@ -440,8 +452,18 @@ export function synthesizeContinuousDerashaMarkdown(params: {
     derasha?.pardes
   );
 
+  const prioritizedSet = new Set<PardesLevelKey>(
+    Array.isArray(derasha?.outputPreferences?.prioritizedLevels)
+      ? derasha.outputPreferences.prioritizedLevels
+      : []
+  );
+
   sections.forEach((sec) => {
-    parts.push(`## ${sec.spanishSubtitle}: ${sec.title} (${sec.hebrewTerm})\n`);
+    const keyLower = (sec.key || '').toLowerCase() as PardesLevelKey;
+    const isPriority = prioritizedSet.has(keyLower);
+    parts.push(
+      `## ${sec.spanishSubtitle}: ${sec.title} (${sec.hebrewTerm})${isPriority ? ' · [Nivel Prioritario]' : ''}\n`
+    );
     parts.push(`${sec.exposition}\n\n`);
     parts.push(`> **Principio clave:** ${sec.keyTakeaway}\n`);
   });

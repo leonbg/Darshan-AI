@@ -103,7 +103,7 @@ const MANUAL_SECTIONS: ManualSection[] = [
     title: '7 Puertas Lógicas, Duración y Tono',
     subtitle: 'Abanico de decisión metodológica con pre-carga en segundo plano',
     searchKeywords:
-      'pardes wissenschaft evolucion concepto mesilat yesharim pirke avot musar filosofia contrastiva duracion tono prewarm',
+      'pardes wissenschaft evolucion concepto mesilat yesharim pirke avot musar filosofia contrastiva duracion tono prewarm profundidad prioridad conclusion final',
     blocks: [
       {
         heading: 'Abanico de Decisión (Reloj Aislado)',
@@ -117,6 +117,11 @@ const MANUAL_SECTIONS: ManualSection[] = [
             label: '8 Opciones de Enfoque',
             detail:
               'Automático (AUTO), PARDÉS Clásico, Wissenschaft des Judentums, Evolución del Concepto (Torá · Cábala · Musar · Jasidut), Mesilat Yesharim Sistemático, Pirké Avot Exegético, Musar Transformativo y Diálogo Filosófico Contrastivo.',
+          },
+          {
+            label: 'Personalización PARDÉS y Conclusión Final',
+            detail:
+              'Desde el abanico («PARDÉS y Conclusión»), Ajustes o debajo de una Drashá generada puedes fijar la profundidad (Breve · Estándar · Profundo) de Pshat, Rémez, Drash y Sod por separado, marcar niveles prioritarios y elegir la extensión de la conclusión final (Concisa · Estándar · Detallada).',
           },
         ],
       },

@@ -254,6 +254,18 @@ export type DerashaTone =
 
 export type ResolvedDerashaTone = Exclude<DerashaTone, 'AUTO'>;
 
+export type PardesLevelKey = 'pshat' | 'remez' | 'drash' | 'sod';
+
+export type PardesAnalysisDepth = 'breve' | 'estandar' | 'profundo';
+
+export type ConclusionLength = 'concisa' | 'estandar' | 'detallada';
+
+export interface DerashaOutputPreferences {
+  pardesDepth: Record<PardesLevelKey, PardesAnalysisDepth>;
+  prioritizedLevels: PardesLevelKey[];
+  conclusionLength: ConclusionLength;
+}
+
 export interface CalibratedQueryDecisionMetrics {
   primaryConfidence: number; // 0 to 1
   toneConfidence: number; // 0 to 1
@@ -357,6 +369,7 @@ export interface FinalDerasha {
   tonoHomiletico?: DerashaTone;
   resolvedTone?: ResolvedDerashaTone;
   toneAdvisory?: string;
+  outputPreferences?: DerashaOutputPreferences;
   methodologySections?: MethodologySectionItem[];
   theologicalKeys?: TheologicalKeys;
   morphologicalSynthesis: {
@@ -555,6 +568,7 @@ export interface ActiveStudySnapshot {
   metodologiasComplementarias: DerashaMethodology[];
   audienciaOTono: string;
   tonoHomiletico?: DerashaTone;
+  outputPreferences?: DerashaOutputPreferences;
   phase1Data: Phase1AnalysisResult;
   verifiedSources: VerifiedSefariaSource[];
   finalDerasha: FinalDerasha;

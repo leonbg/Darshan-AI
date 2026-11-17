@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { Compass, HeartHandshake, Eye, Sparkles, Copy, Check, Share2 } from 'lucide-react';
-import { FinalDerasha } from '../../types';
+import { ConclusionLength, FinalDerasha } from '../../types';
+import { getConclusionLengthLabelEs } from '../../utils/outputPreferences';
 
 interface PracticalConclusionCardProps {
   conclusion: FinalDerasha['practicalConclusion'];
+  conclusionLength?: ConclusionLength;
   onExport: () => void;
 }
 
 export const PracticalConclusionCard: React.FC<PracticalConclusionCardProps> = React.memo(({
   conclusion,
+  conclusionLength,
   onExport,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -29,9 +32,14 @@ export const PracticalConclusionCard: React.FC<PracticalConclusionCardProps> = R
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
         <div className="space-y-0.5">
-          <div className="text-[11px] font-medium uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
+          <div className="text-[11px] font-medium uppercase tracking-widest text-sky-400 flex items-center gap-1.5 flex-wrap">
             <Compass className="w-3.5 h-3.5" />
             <span>Conclusión Práctica · Hashkafá y Conducta</span>
+            {conclusionLength && conclusionLength !== 'estandar' && (
+              <span className="text-emerald-300 font-semibold">
+                · Extensión {getConclusionLengthLabelEs(conclusionLength)}
+              </span>
+            )}
           </div>
           <h3 className="font-editorial text-lg sm:text-xl font-bold text-white">
             {conclusion.title}

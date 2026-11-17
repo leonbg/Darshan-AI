@@ -33,6 +33,10 @@ import {
   MethodologyDeliberationResult,
   ArchivedDerashaEntry,
   DerashaRelationType,
+  DerashaOutputPreferences,
+  PardesLevelKey,
+  PardesAnalysisDepth,
+  ConclusionLength,
 } from '../../types';
 import {
   resolvePipelineMethodology,
@@ -46,6 +50,12 @@ import {
   getToneMeta,
   resolveDerashaTone,
 } from '../../utils/toneAdvisor';
+import {
+  DEFAULT_DERASHA_OUTPUT_PREFERENCES,
+  hasCustomOutputPreferences,
+  summarizeOutputPreferencesEs,
+} from '../../utils/outputPreferences';
+import { OutputCustomizationControls } from './OutputCustomizationControls';
 import { parseCrossDerashaComparisonCommand } from '../../services/archiveService';
 
 interface InputSectionProps {
@@ -87,6 +97,12 @@ interface InputSectionProps {
   onOpenUserManualModal?: () => void;
   collapseFanSignal?: number;
   isEvaluatingQuery?: boolean;
+  outputPreferences?: DerashaOutputPreferences;
+  onChangePardesDepth?: (level: PardesLevelKey, depth: PardesAnalysisDepth) => void;
+  onTogglePrioritizedPardesLevel?: (level: PardesLevelKey) => void;
+  onChangeConclusionLength?: (length: ConclusionLength) => void;
+  onApplyAllPardesDepth?: (depth: PardesAnalysisDepth) => void;
+  onResetOutputPreferences?: () => void;
 }
 
 export const METHODOLOGY_OPTIONS: Array<{
@@ -210,6 +226,12 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
   onOpenUserManualModal,
   collapseFanSignal = 0,
   isEvaluatingQuery = false,
+  outputPreferences,
+  onChangePardesDepth,
+  onTogglePrioritizedPardesLevel,
+  onChangeConclusionLength,
+  onApplyAllPardesDepth,
+  onResetOutputPreferences,
 }) => {
   // Collapsed by default so the UI stays clean and uncluttered
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
@@ -217,6 +239,16 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
   const [localHomeTapArmed, setLocalHomeTapArmed] = useState<boolean>(false);
   const lastClearTapAtRef = useRef<number>(0);
   const clearArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const effectiveOutputPrefs = outputPreferences || DEFAULT_DERASHA_OUTPUT_PREFERENCES;
+  const isOutputCustomized = useMemo(
+    () => hasCustomOutputPreferences(effectiveOutputPrefs),
+    [effectiveOutputPrefs]
+  );
+  const outputPrefsSummary = useMemo(
+    () => summarizeOutputPreferencesEs(effectiveOutputPrefs),
+    [effectiveOutputPrefs]
+  );
 
   const isHomeTapArmed = isHomeTapArmedProp ?? localHomeTapArmed;
 
@@ -743,7 +775,7 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
               type="button"
               onClick={handleToggleConfigFan}
               title={toneEvaluation.advisoryReason}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-medium transition cursor-pointer ${activeToneMeta.badgeClass}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${activeToneMeta.badgeClass}`}
             >
               <Feather className="w-3 h-3 shrink-0" />
               <span>
@@ -755,6 +787,36 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
                 </strong>
               </span>
             </button>
+
+            {/* Compact Output Customization Trigger */}
+            {onChangePardesDepth &&
+              onTogglePrioritizedPardesLevel &&
+              onChangeConclusionLength && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isConfigOpen) {
+                      handleToggleConfigFan();
+                    }
+                    setTimeout(() => {
+                      document
+                        .getElementById('output-customization-section')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 80);
+                  }}
+                  title={`Personalizar profundidad por nivel PARDÉS, niveles prioritarios y extensión de la conclusión (${outputPrefsSummary})`}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
+                    isOutputCustomized
+                      ? 'bg-amber-500/15 border-amber-400/50 text-amber-200'
+                      : 'bg-[#090f1d] border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-3 h-3 shrink-0 text-amber-300" />
+                  <span className="max-w-[220px] truncate">
+                    {isOutputCustomized ? outputPrefsSummary : 'PARDÉS y Conclusión'}
+                  </span>
+                </button>
+              )}
 
             {isPrewarmedReady && !isLoading && (
               <span
@@ -1287,6 +1349,24 @@ export const InputSection: React.FC<InputSectionProps> = React.memo(({
                 </div>
               </div>
             </div>
+
+            {onChangePardesDepth &&
+              onTogglePrioritizedPardesLevel &&
+              onChangeConclusionLength &&
+              onResetOutputPreferences && (
+                <div id="output-customization-section">
+                  <OutputCustomizationControls
+                    compact
+                    preferences={effectiveOutputPrefs}
+                    onChangePardesDepth={onChangePardesDepth}
+                    onTogglePrioritizedLevel={onTogglePrioritizedPardesLevel}
+                    onChangeConclusionLength={onChangeConclusionLength}
+                    onApplyAllPardesDepth={onApplyAllPardesDepth}
+                    onResetPreferences={onResetOutputPreferences}
+                    disabled={isLoading}
+                  />
+                </div>
+              )}
           </div>
         )}
       </div>

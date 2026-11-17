@@ -1,6 +1,10 @@
 import { validatePurelyHalakhicQuery } from '../src/utils/halakhicPipelineValidator.ts';
 import { detectExternalThinkerAndForceExegeticalSearch } from '../src/utils/externalThinkerDetector.ts';
 import { getToneRhetoricalDirectives } from '../src/utils/toneAdvisor.ts';
+import {
+  buildOutputPreferencesPromptDirectives,
+  normalizeDerashaOutputPreferences,
+} from '../src/utils/outputPreferences.ts';
 import { normalizeUserStudyQuery } from './queryNormalization.ts';
 import { decideMethodologyCache } from './aiClient.ts';
 
@@ -424,6 +428,14 @@ Debes estructurar tanto el discurso continuo ('fullStructuredDerashaMarkdown') c
 2. Rémez (רֶמֶז — Nivel de alusión ética y filosófica): Alusiones intertextuales, patrones numéricos o conceptuales y resonancias filosóficas en la Torá.
 3. Drash (דְּרַשׁ — Nivel de interpretación homilética y midráshica): Enseñanzas de Jazal en el Talmud y el Midrash Rabá, lecciones morales y dialéctica rabínica.
 4. Sod (סוֹד — Nivel de dimensión profunda o mística): Dimensión interior del alma y del cosmos según el Zóhar, el Arizal, las Sefirot y la Jasidut.`;
+}
+
+export function getOutputPreferencesInstructions(
+  rawPreferences: any,
+  metodologia: string
+): string {
+  const normalized = normalizeDerashaOutputPreferences(rawPreferences);
+  return buildOutputPreferencesPromptDirectives(normalized, metodologia);
 }
 
 export function hasExplicitServerCitationOrCalendar(rawQuery: string): boolean {

@@ -14,7 +14,13 @@ import {
   VerifiedSefariaSource,
   MethodologySectionItem,
   DerashaMethodology,
+  PardesLevelKey,
 } from '../../types';
+import {
+  getDepthLabelEs,
+  hasCustomOutputPreferences,
+  summarizeOutputPreferencesEs,
+} from '../../utils/outputPreferences';
 
 interface PardesViewProps {
   derasha: FinalDerasha;
@@ -730,6 +736,11 @@ export const PardesView: React.FC<PardesViewProps> = React.memo(({
               </span>
             </div>
             <p className="text-xs text-slate-400">{meta.subtitle}</p>
+            {derasha.outputPreferences && hasCustomOutputPreferences(derasha.outputPreferences) && (
+              <p className="text-[11px] text-amber-300/90 font-medium">
+                Personalización aplicada: {summarizeOutputPreferencesEs(derasha.outputPreferences)}
+              </p>
+            )}
           </div>
 
           {/* Bulk Export / Share / Print Toolbar */}
@@ -840,11 +851,24 @@ export const PardesView: React.FC<PardesViewProps> = React.memo(({
       >
         {displayedSections.map((sec, idx) => {
           const colorClasses = CARD_COLOR_THEMES[idx % CARD_COLOR_THEMES.length];
+          const secKeyLower = (sec.key || '').toLowerCase() as PardesLevelKey;
+          const isPardesLevel =
+            secKeyLower === 'pshat' ||
+            secKeyLower === 'remez' ||
+            secKeyLower === 'drash' ||
+            secKeyLower === 'sod';
+          const isPrioritized =
+            isPardesLevel &&
+            Boolean(derasha.outputPreferences?.prioritizedLevels?.includes(secKeyLower));
+          const customDepth =
+            isPardesLevel && derasha.outputPreferences?.pardesDepth?.[secKeyLower];
 
           return (
             <div
               key={sec.key}
-              className={`rounded-2xl border ${colorClasses.border} ${colorClasses.cardBg} bg-gradient-to-b ${colorClasses.bgGlow} p-5 sm:p-6 flex flex-col justify-between gap-4 transition-all relative overflow-hidden`}
+              className={`rounded-2xl border ${
+                isPrioritized ? 'border-amber-400/60 hover:border-amber-300/80' : colorClasses.border
+              } ${colorClasses.cardBg} bg-gradient-to-b ${colorClasses.bgGlow} p-5 sm:p-6 flex flex-col justify-between gap-4 transition-all relative overflow-hidden`}
             >
               <div className="space-y-4">
                 {/* Section top bar */}
@@ -865,6 +889,16 @@ export const PardesView: React.FC<PardesViewProps> = React.memo(({
                         <span className={`font-semibold ${colorClasses.accentText}`}>
                           {sec.spanishSubtitle}
                         </span>
+                        {isPrioritized && (
+                          <span className="text-[11px] font-bold text-amber-300">
+                            · Prioritario
+                          </span>
+                        )}
+                        {customDepth && customDepth !== 'estandar' && (
+                          <span className="text-[11px] font-medium text-slate-400">
+                            · {getDepthLabelEs(customDepth)}
+                          </span>
+                        )}
                       </div>
                       <h4 className="font-editorial text-base sm:text-lg font-bold text-slate-100 mt-0.5">
                         {sec.title}

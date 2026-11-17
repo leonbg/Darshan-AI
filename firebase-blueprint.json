@@ -56,11 +56,12 @@
           "type": "string",
           "description": "Full or summarized homiletical text for search and comparison.",
           "minLength": 1,
-          "maxLength": 15000
+          "maxLength": 30000
         },
         "sourcesSummary": {
           "type": "string",
           "description": "Canonical Sefaria references and external sources cited.",
+          "minLength": 1,
           "maxLength": 4000
         },
         "createdAt": {
@@ -105,6 +106,7 @@
           "type": "string",
           "description": "Analytical lens: RELACION, CONTRADICCION, COMPLEMENTO, or INTEGRAL.",
           "enum": ["RELACION", "CONTRADICCION", "COMPLEMENTO", "INTEGRAL"],
+          "minLength": 1,
           "maxLength": 40
         },
         "comparedLabel": {
@@ -116,6 +118,7 @@
         "userHypothesis": {
           "type": "string",
           "description": "User observation or hypothesis about how the selected Derashot relate, contradict, or complement each other.",
+          "minLength": 1,
           "maxLength": 2000
         },
         "synthesisTitle": {

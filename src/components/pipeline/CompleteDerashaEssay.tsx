@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   History,
   Loader2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { getToneMeta } from '../../utils/toneAdvisor';
 import {
@@ -33,7 +34,20 @@ import {
   DerashaMethodology,
   HalakhicGenerationEra,
   MishnatHaDorotQuote,
+  DerashaOutputPreferences,
+  PardesLevelKey,
+  PardesAnalysisDepth,
+  ConclusionLength,
 } from '../../types';
+import {
+  DEFAULT_DERASHA_OUTPUT_PREFERENCES,
+  areOutputPreferencesEqual,
+  getConclusionLengthLabelEs,
+  getDepthLabelEs,
+  hasCustomOutputPreferences,
+  summarizeOutputPreferencesEs,
+} from '../../utils/outputPreferences';
+import { OutputCustomizationControls } from './OutputCustomizationControls';
 import {
   getMethodologyMeta,
   METHODOLOGY_DISPLAY_LIST,
@@ -72,6 +86,13 @@ interface CompleteDerashaEssayProps {
   isTranslatingRef?: string | null;
   isTranslatingAll?: boolean;
   onSaveMishnatHaDorotQuotes?: (quotes: MishnatHaDorotQuote[]) => void;
+  outputPreferences?: DerashaOutputPreferences;
+  onChangePardesDepth?: (level: PardesLevelKey, depth: PardesAnalysisDepth) => void;
+  onTogglePrioritizedPardesLevel?: (level: PardesLevelKey) => void;
+  onChangeConclusionLength?: (length: ConclusionLength) => void;
+  onApplyAllPardesDepth?: (depth: PardesAnalysisDepth) => void;
+  onResetOutputPreferences?: () => void;
+  onRegenerateWithOutputPreferences?: () => void;
 }
 
 const SECTION_ACCENTS = [
@@ -118,9 +139,17 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
   isTranslatingRef,
   isTranslatingAll = false,
   onSaveMishnatHaDorotQuotes,
+  outputPreferences,
+  onChangePardesDepth,
+  onTogglePrioritizedPardesLevel,
+  onChangeConclusionLength,
+  onApplyAllPardesDepth,
+  onResetOutputPreferences,
+  onRegenerateWithOutputPreferences,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showAddMethodPicker, setShowAddMethodPicker] = useState(false);
+  const [showOutputCustomizer, setShowOutputCustomizer] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showInlineSources, setShowInlineSources] = useState(false);
@@ -469,6 +498,16 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                 </span>
               );
             })}
+
+            {derasha.outputPreferences && hasCustomOutputPreferences(derasha.outputPreferences) && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700/80 text-amber-200 text-xs font-medium"
+                title="Preferencias de profundidad PARDÉS y extensión de conclusión aplicadas en esta Drashá"
+              >
+                <SlidersHorizontal className="w-3 h-3 text-amber-300" />
+                <span>{summarizeOutputPreferencesEs(derasha.outputPreferences)}</span>
+              </span>
+            )}
           </div>
 
           {/* Action Toolbar: Direct PDF, Editable Word (.doc), Open Format (.rtf), Copy & Full Modal */}
@@ -606,6 +645,18 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
       <div className="p-6 sm:p-10 space-y-10 bg-[#0b1120]">
         {primarySections.map((sec, idx) => {
           const accent = SECTION_ACCENTS[idx % SECTION_ACCENTS.length];
+          const secKeyLower = (sec.id || '').toLowerCase() as PardesLevelKey;
+          const isPardesLevel =
+            secKeyLower === 'pshat' ||
+            secKeyLower === 'remez' ||
+            secKeyLower === 'drash' ||
+            secKeyLower === 'sod';
+          const isPrioritized =
+            isPardesLevel &&
+            Boolean(derasha.outputPreferences?.prioritizedLevels?.includes(secKeyLower));
+          const customDepth =
+            isPardesLevel && derasha.outputPreferences?.pardesDepth?.[secKeyLower];
+
           return (
             <section
               key={sec.id}
@@ -614,12 +665,22 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
               {/* Section Header */}
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider border ${accent.badge}`}
                     >
                       {sec.orderLabel} · {sec.spanishSubtitle}
                     </span>
+                    {isPrioritized && (
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                        · Nivel prioritario
+                      </span>
+                    )}
+                    {customDepth && customDepth !== 'estandar' && (
+                      <span className="text-[11px] font-medium text-slate-400">
+                        · Profundidad {getDepthLabelEs(customDepth)}
+                      </span>
+                    )}
                   </div>
                   <h3 className="font-editorial text-xl sm:text-2xl font-bold text-white pt-1">
                     {sec.title}
@@ -725,6 +786,10 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
               <div className="space-y-1">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-sky-400 block">
                   Conclusión Práctica y Compromiso Ético
+                  {derasha.outputPreferences?.conclusionLength &&
+                  derasha.outputPreferences.conclusionLength !== 'estandar'
+                    ? ` · Extensión ${getConclusionLengthLabelEs(derasha.outputPreferences.conclusionLength)}`
+                    : ''}
                 </span>
                 <h3 className="font-editorial text-xl sm:text-2xl font-bold text-white">
                   {derasha.practicalConclusion.title ||
@@ -1573,12 +1638,37 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                 <button
                   type="button"
                   disabled={isRegeneratingDuration}
-                  onClick={() => setShowAddMethodPicker(!showAddMethodPicker)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/35 text-indigo-200 transition cursor-pointer"
+                  onClick={() => {
+                    setShowAddMethodPicker(!showAddMethodPicker);
+                    setShowOutputCustomizer(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/35 text-indigo-200 transition cursor-pointer whitespace-nowrap"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Sumar Metodología</span>
                 </button>
+
+                {onChangePardesDepth &&
+                  onTogglePrioritizedPardesLevel &&
+                  onChangeConclusionLength &&
+                  onResetOutputPreferences && (
+                    <button
+                      type="button"
+                      disabled={isRegeneratingDuration}
+                      onClick={() => {
+                        setShowOutputCustomizer(!showOutputCustomizer);
+                        setShowAddMethodPicker(false);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer whitespace-nowrap ${
+                        showOutputCustomizer
+                          ? 'bg-amber-400 text-slate-950 border-amber-300'
+                          : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/35 text-amber-200'
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <span>Ajustar PARDÉS y Conclusión</span>
+                    </button>
+                  )}
               </div>
             </div>
 
@@ -1611,6 +1701,40 @@ export const CompleteDerashaEssay: React.FC<CompleteDerashaEssayProps> = React.m
                 </div>
               </div>
             )}
+
+            {showOutputCustomizer &&
+              onChangePardesDepth &&
+              onTogglePrioritizedPardesLevel &&
+              onChangeConclusionLength &&
+              onResetOutputPreferences && (
+                <div className="pt-3 border-t border-slate-800/80">
+                  <OutputCustomizationControls
+                    compact
+                    preferences={outputPreferences || DEFAULT_DERASHA_OUTPUT_PREFERENCES}
+                    onChangePardesDepth={onChangePardesDepth}
+                    onTogglePrioritizedLevel={onTogglePrioritizedPardesLevel}
+                    onChangeConclusionLength={onChangeConclusionLength}
+                    onApplyAllPardesDepth={onApplyAllPardesDepth}
+                    onResetPreferences={onResetOutputPreferences}
+                    disabled={isRegeneratingDuration}
+                    isRegenerating={isRegeneratingDuration}
+                    hasUnsavedStudyChanges={
+                      !areOutputPreferencesEqual(
+                        outputPreferences || DEFAULT_DERASHA_OUTPUT_PREFERENCES,
+                        derasha.outputPreferences || DEFAULT_DERASHA_OUTPUT_PREFERENCES
+                      )
+                    }
+                    onApplyAndRegenerate={
+                      onRegenerateWithOutputPreferences
+                        ? () => {
+                            setShowOutputCustomizer(false);
+                            onRegenerateWithOutputPreferences();
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
           </div>
         )}
 

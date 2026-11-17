@@ -18,17 +18,26 @@ import {
   AlignRight,
   BookOpen,
   HelpCircle,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { AtrilReadingScale, AtrilTypographyPreset } from '../../hooks/useAtrilPreferences';
-import { SystemSafePointSnapshot } from '../../types';
+import {
+  ConclusionLength,
+  DerashaOutputPreferences,
+  PardesAnalysisDepth,
+  PardesLevelKey,
+  SystemSafePointSnapshot,
+} from '../../types';
 import {
   exportSafePointToJsonFile,
   GOLDEN_BASELINE_ID,
 } from '../../services/safePointService';
+import { DEFAULT_DERASHA_OUTPUT_PREFERENCES } from '../../utils/outputPreferences';
+import { OutputCustomizationControls } from '../pipeline/OutputCustomizationControls';
 import { WorkspaceTab } from './Header';
 import { PWAInstallButton } from './PWAInstallButton';
 
-export type SettingsModalTab = 'typography' | 'backup' | 'maintenance';
+export type SettingsModalTab = 'typography' | 'output' | 'backup' | 'maintenance';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -62,6 +71,16 @@ interface SettingsModalProps {
   activeStudyTitle?: string;
   onOpenAboutModal: () => void;
   onOpenUserManualModal?: () => void;
+  // Output customization (PARDES & conclusion)
+  outputPreferences?: DerashaOutputPreferences;
+  onChangePardesDepth?: (level: PardesLevelKey, depth: PardesAnalysisDepth) => void;
+  onTogglePrioritizedPardesLevel?: (level: PardesLevelKey) => void;
+  onChangeConclusionLength?: (length: ConclusionLength) => void;
+  onApplyAllPardesDepth?: (depth: PardesAnalysisDepth) => void;
+  onResetOutputPreferences?: () => void;
+  onApplyAndRegenerateActiveStudy?: () => void;
+  isRegeneratingActiveStudy?: boolean;
+  hasUnsavedOutputChanges?: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -87,6 +106,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   activeStudyTitle,
   onOpenAboutModal,
   onOpenUserManualModal,
+  outputPreferences,
+  onChangePardesDepth,
+  onTogglePrioritizedPardesLevel,
+  onChangeConclusionLength,
+  onApplyAllPardesDepth,
+  onResetOutputPreferences,
+  onApplyAndRegenerateActiveStudy,
+  isRegeneratingActiveStudy = false,
+  hasUnsavedOutputChanges = false,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsModalTab>(initialTab);
   const [customLabel, setCustomLabel] = useState('');
@@ -217,40 +245,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('typography')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
               activeTab === 'typography'
                 ? 'bg-amber-400 text-slate-950 shadow-sm'
                 : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-800'
             }`}
           >
             <Type className="w-4 h-4" />
-            <span>1. Tipografías y Modo Atril</span>
+            <span>1. Tipografías y Atril</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('output')}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+              activeTab === 'output'
+                ? 'bg-sky-400 text-slate-950 shadow-sm'
+                : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-800'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>2. Salida PARDÉS y Conclusión</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('backup')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
               activeTab === 'backup'
                 ? 'bg-emerald-400 text-slate-950 shadow-sm'
                 : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-800'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>2. Respaldo y Puntos Seguros ({safePoints.length})</span>
+            <span>3. Respaldo ({safePoints.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('maintenance')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
               activeTab === 'maintenance'
-                ? 'bg-sky-400 text-slate-950 shadow-sm'
+                ? 'bg-indigo-400 text-slate-950 shadow-sm'
                 : 'bg-slate-900/90 text-slate-300 hover:text-white border border-slate-800'
             }`}
           >
             <Wrench className="w-4 h-4" />
-            <span>3. Mantenimiento y Sistema</span>
+            <span>4. Mantenimiento</span>
           </button>
         </div>
 
@@ -283,6 +324,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+          {/* TAB 2: PARDES & CONCLUSION OUTPUT CUSTOMIZATION */}
+          {activeTab === 'output' &&
+            onChangePardesDepth &&
+            onTogglePrioritizedPardesLevel &&
+            onChangeConclusionLength &&
+            onResetOutputPreferences && (
+              <OutputCustomizationControls
+                preferences={outputPreferences || DEFAULT_DERASHA_OUTPUT_PREFERENCES}
+                onChangePardesDepth={onChangePardesDepth}
+                onTogglePrioritizedLevel={onTogglePrioritizedPardesLevel}
+                onChangeConclusionLength={onChangeConclusionLength}
+                onApplyAllPardesDepth={onApplyAllPardesDepth}
+                onResetPreferences={onResetOutputPreferences}
+                onApplyAndRegenerate={
+                  activeStudyTitle && onApplyAndRegenerateActiveStudy
+                    ? () => {
+                        onClose();
+                        onApplyAndRegenerateActiveStudy();
+                      }
+                    : undefined
+                }
+                isRegenerating={isRegeneratingActiveStudy}
+                hasUnsavedStudyChanges={hasUnsavedOutputChanges}
+              />
+            )}
+
           {/* TAB 1: TYPOGRAPHY & ATRIL / BIMA */}
           {activeTab === 'typography' && (
             <div className="space-y-6">

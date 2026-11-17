@@ -14,7 +14,9 @@ import {
   db,
   collection,
   doc,
+  getDoc,
   setDoc,
+  updateDoc,
   deleteDoc,
   query,
   where,
@@ -118,8 +120,10 @@ export function unmarkDeletedDerasha(
 
 function truncateStr(val: string | undefined | null, maxLen: number, fallback = '-'): string {
   const clean = (val || '').trim();
-  if (!clean) return fallback;
-  return clean.length > maxLen ? clean.slice(0, maxLen) : clean;
+  const safeFallback = (fallback || '').trim() || '-';
+  const candidate = clean || safeFallback;
+  const codePoints = Array.from(candidate);
+  return codePoints.length > maxLen ? codePoints.slice(0, maxLen).join('') : candidate;
 }
 
 export const INITIAL_SEEDED_DERASHOT: ArchivedDerashaEntry[] = [
@@ -592,38 +596,85 @@ export function saveLocalComparativeStudies(studies: ComparativeDerashaAnalysisR
   }
 }
 
+const knownRemoteDerashaDocIds = new Set<string>();
+const knownRemoteComparativeDocIds = new Set<string>();
+
+export function buildDerashaFirestoreDocId(uid: string, sequenceNumber: number): string {
+  const safeSeq = Math.max(1, Math.min(100000, Math.floor(Number(sequenceNumber) || 1)));
+  const safeUid = uid.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  return `${safeUid}_derasha_${safeSeq}`.slice(0, 128);
+}
+
+export function clearKnownFirestoreCache(): void {
+  knownRemoteDerashaDocIds.clear();
+  knownRemoteComparativeDocIds.clear();
+}
+
 /**
  * Syncs a single ArchivedDerashaEntry to Firestore when the user is signed in.
- * Enforces strict blueprint volumetric limits and serverTimestamp().
+ * Enforces strict blueprint volumetric limits and separates CREATE (setDoc) from
+ * UPDATE (updateDoc) so immutable fields (ownerId, sequenceNumber, createdAt) are never overwritten.
  */
 export async function syncDerashaEntryToFirestore(entry: ArchivedDerashaEntry): Promise<void> {
   if (!isFirestoreEnabled) return;
   const currentUser = auth.currentUser;
   if (!currentUser || !currentUser.emailVerified) return;
 
-  const docId = `${currentUser.uid}_derasha_${entry.sequenceNumber}`.replace(
-    /[^a-zA-Z0-9_\-]/g,
-    '_'
-  );
+  const safeSeq = Math.max(1, Math.min(100000, Math.floor(Number(entry.sequenceNumber) || 1)));
+  const docId = buildDerashaFirestoreDocId(currentUser.uid, safeSeq);
   const path = `derashot_archive/${docId}`;
+  const docRef = doc(db, 'derashot_archive', docId);
 
-  try {
-    await setDoc(doc(db, 'derashot_archive', docId), {
-      ownerId: currentUser.uid,
-      sequenceNumber: Math.max(1, Math.min(100000, Math.floor(entry.sequenceNumber))),
-      title: truncateStr(entry.title, 300, `Derashá #${entry.sequenceNumber}`),
-      query: truncateStr(entry.query, 2000, entry.title),
-      methodology: truncateStr(entry.methodology, 80, 'PARDES'),
-      duration: truncateStr(entry.duration, 40, '10_MIN'),
-      audienceOrTone: truncateStr(entry.audienceOrTone, 200, 'Comunidad general'),
-      centralIdea: truncateStr(entry.centralIdea, 2000, entry.title),
-      essaySummary: truncateStr(entry.essaySummary, 15000, entry.centralIdea),
-      sourcesSummary: truncateStr(entry.sourcesSummary, 4000, 'Sefaria'),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+  const mutableFields = {
+    title: truncateStr(entry.title, 300, `Derashá #${safeSeq}`),
+    query: truncateStr(entry.query, 2000, entry.title || `Derashá #${safeSeq}`),
+    methodology: truncateStr(entry.methodology, 80, 'PARDES'),
+    duration: truncateStr(entry.duration, 40, '10_MIN'),
+    audienceOrTone: truncateStr(entry.audienceOrTone, 200, 'Comunidad general'),
+    centralIdea: truncateStr(entry.centralIdea, 2000, entry.title || `Derashá #${safeSeq}`),
+    essaySummary: truncateStr(
+      entry.essaySummary,
+      30000,
+      entry.centralIdea || entry.title || `Derashá #${safeSeq}`
+    ),
+    sourcesSummary: truncateStr(entry.sourcesSummary, 4000, 'Sefaria'),
+  };
+
+  let alreadyExists = knownRemoteDerashaDocIds.has(docId);
+  if (!alreadyExists) {
+    try {
+      const existingSnap = await getDoc(docRef);
+      alreadyExists = existingSnap.exists();
+      if (alreadyExists) {
+        knownRemoteDerashaDocIds.add(docId);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  }
+
+  if (alreadyExists) {
+    try {
+      await updateDoc(docRef, {
+        ...mutableFields,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  } else {
+    try {
+      await setDoc(docRef, {
+        ownerId: currentUser.uid,
+        sequenceNumber: safeSeq,
+        ...mutableFields,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      knownRemoteDerashaDocIds.add(docId);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   }
 }
 
@@ -637,42 +688,88 @@ export async function syncComparativeStudyToFirestore(
   const currentUser = auth.currentUser;
   if (!currentUser || !currentUser.emailVerified) return;
 
-  const safeId = study.id.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 80);
-  const docId = `${currentUser.uid}_${safeId}`.slice(0, 120);
+  const safeUid = currentUser.uid.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const safeId = (study.id || `comp_${Date.now()}`).replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 80);
+  const docId = `${safeUid}_${safeId}`.slice(0, 120);
   const path = `comparative_studies/${docId}`;
+  const docRef = doc(db, 'comparative_studies', docId);
 
-  try {
-    await setDoc(doc(db, 'comparative_studies', docId), {
-      ownerId: currentUser.uid,
-      relationType: study.relationType || 'INTEGRAL',
-      comparedLabel: truncateStr(
-        study.comparedNumbers.map((n) => `Derashá #${n}`).join(' vs '),
-        300,
-        'Comparativa de Derashot'
-      ),
-      userHypothesis: truncateStr(study.userHypothesis, 2000, 'Análisis dialéctico'),
-      synthesisTitle: truncateStr(study.synthesisTitle, 300, 'Síntesis Comparativa'),
-      executiveVerdict: truncateStr(study.executiveVerdict, 4000, study.synthesisTitle),
-      contradictionsAnalysis: truncateStr(
-        study.pointsOfContradictionOrTension,
-        6000,
-        'Sin contradicción irresoluble.'
-      ),
-      complementarityAnalysis: truncateStr(
-        study.pointsOfComplementarity,
-        6000,
-        'Complementariedad exegética.'
-      ),
-      dialecticalResolution: truncateStr(
-        study.dialecticalSynthesisAndHomileticBridge,
-        6000,
-        study.executiveVerdict
-      ),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+  const validRelation: DerashaRelationType = [
+    'RELACION',
+    'CONTRADICCION',
+    'COMPLEMENTO',
+    'INTEGRAL',
+  ].includes(study.relationType)
+    ? study.relationType
+    : 'INTEGRAL';
+
+  const comparedLabel = truncateStr(
+    (study.comparedNumbers || []).map((n) => `Derashá #${n}`).join(' vs '),
+    300,
+    'Comparativa de Derashot'
+  );
+
+  const mutableFields = {
+    userHypothesis: truncateStr(study.userHypothesis, 2000, 'Análisis dialéctico'),
+    synthesisTitle: truncateStr(study.synthesisTitle, 300, 'Síntesis Comparativa'),
+    executiveVerdict: truncateStr(
+      study.executiveVerdict,
+      4000,
+      study.synthesisTitle || 'Síntesis Comparativa'
+    ),
+    contradictionsAnalysis: truncateStr(
+      study.pointsOfContradictionOrTension,
+      6000,
+      'Sin contradicción irresoluble.'
+    ),
+    complementarityAnalysis: truncateStr(
+      study.pointsOfComplementarity,
+      6000,
+      'Complementariedad exegética.'
+    ),
+    dialecticalResolution: truncateStr(
+      study.dialecticalSynthesisAndHomileticBridge,
+      6000,
+      study.executiveVerdict || 'Síntesis dialéctica.'
+    ),
+  };
+
+  let alreadyExists = knownRemoteComparativeDocIds.has(docId);
+  if (!alreadyExists) {
+    try {
+      const existingSnap = await getDoc(docRef);
+      alreadyExists = existingSnap.exists();
+      if (alreadyExists) {
+        knownRemoteComparativeDocIds.add(docId);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  }
+
+  if (alreadyExists) {
+    try {
+      await updateDoc(docRef, {
+        ...mutableFields,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  } else {
+    try {
+      await setDoc(docRef, {
+        ownerId: currentUser.uid,
+        relationType: validRelation,
+        comparedLabel,
+        ...mutableFields,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      knownRemoteComparativeDocIds.add(docId);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
   }
 }
 
@@ -680,10 +777,11 @@ export async function deleteDerashaFromFirestore(sequenceNumber: number): Promis
   if (!isFirestoreEnabled) return;
   const currentUser = auth.currentUser;
   if (!currentUser || !currentUser.emailVerified) return;
-  const docId = `${currentUser.uid}_derasha_${sequenceNumber}`.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const docId = buildDerashaFirestoreDocId(currentUser.uid, sequenceNumber);
   const path = `derashot_archive/${docId}`;
   try {
     await deleteDoc(doc(db, 'derashot_archive', docId));
+    knownRemoteDerashaDocIds.delete(docId);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
@@ -694,9 +792,9 @@ export async function deleteDerashaFromFirestore(sequenceNumber: number): Promis
  */
 export function subscribeToFirestoreArchive(
   userId: string,
-  onReceive: (entries: ArchivedDerashaEntry[]) => void
+  onReceive: (entries: ArchivedDerashaEntry[], remoteDocIds: ReadonlySet<string>) => void
 ): () => void {
-  if (!isFirestoreEnabled) {
+  if (!isFirestoreEnabled || !userId) {
     return () => {};
   }
   const path = 'derashot_archive';
@@ -706,8 +804,18 @@ export function subscribeToFirestoreArchive(
     q,
     (snapshot) => {
       const remoteEntries: ArchivedDerashaEntry[] = [];
+      const snapshotDocIds = new Set<string>();
+      const prefix = `${userId.replace(/[^a-zA-Z0-9_\-]/g, '_')}_`;
+      for (const existingId of Array.from(knownRemoteDerashaDocIds)) {
+        if (existingId.startsWith(prefix)) {
+          knownRemoteDerashaDocIds.delete(existingId);
+        }
+      }
+
       snapshot.forEach((docSnap) => {
         const d = docSnap.data();
+        snapshotDocIds.add(docSnap.id);
+        knownRemoteDerashaDocIds.add(docSnap.id);
         remoteEntries.push({
           id: docSnap.id,
           sequenceNumber: Number(d.sequenceNumber) || 1,
@@ -727,9 +835,11 @@ export function subscribeToFirestoreArchive(
             : new Date().toISOString(),
         });
       });
-      if (remoteEntries.length > 0) {
-        onReceive(remoteEntries.sort((a, b) => a.sequenceNumber - b.sequenceNumber));
-      }
+
+      onReceive(
+        remoteEntries.sort((a, b) => a.sequenceNumber - b.sequenceNumber),
+        snapshotDocIds
+      );
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, path);

@@ -1,12 +1,14 @@
 import {
   DerashaDuration,
   DerashaMethodology,
+  DerashaOutputPreferences,
   DerashaTone,
   FinalDerasha,
   Phase1AnalysisResult,
   VerifiedSefariaSource,
 } from '../../types';
 import { requestPhase3Derasha } from '../api';
+import { normalizeDerashaOutputPreferences } from '../../utils/outputPreferences';
 import { resolvePipelineMethodology } from '../../utils/methodologyLogicGates';
 import {
   consultHalakhicShulchanArukhModule,
@@ -42,12 +44,16 @@ export async function executePhase3DerashaSynthesis(
       ? params.phase1Data.halakhicConsultation
       : consultHalakhicShulchanArukhModule(params.effectiveQuery, halakhicValidation);
 
+  const normalizedOutputPreferences = normalizeDerashaOutputPreferences(params.outputPreferences);
+
   const derashaPayload = {
     query: params.effectiveQuery,
     tema_o_fuente: params.effectiveQuery,
     metodologia: safeMethodology,
     audiencia_o_tono: params.audienciaOTono,
     tono_homiletico: params.tonoHomiletico,
+    preferencias_salida: normalizedOutputPreferences,
+    outputPreferences: normalizedOutputPreferences,
     duracion: params.duracion,
     metodologias_complementarias: safeComplementary,
     title: params.phase1Data.title,
@@ -91,6 +97,7 @@ export async function executePhase3DerashaSynthesis(
   const rawFinalDerasha: FinalDerasha = {
     ...p3Result,
     duracion: p3Result.duracion || params.duracion,
+    outputPreferences: p3Result.outputPreferences || normalizedOutputPreferences,
     metodologiasComplementarias: (
       p3Result.metodologiasComplementarias || safeComplementary
     ).filter((m) => !suppressExternal || m !== 'FILOSOFIA_CONTRASTIVA'),
@@ -124,6 +131,7 @@ export async function executeDurationOrComplementaryResynthesis(params: {
   extraMethodology?: DerashaMethodology;
   audienciaOTono: string;
   tonoHomiletico?: DerashaTone;
+  outputPreferences?: DerashaOutputPreferences;
   phase1Data: Phase1AnalysisResult;
   verifiedSources: VerifiedSefariaSource[];
 }): Promise<{
@@ -159,6 +167,7 @@ export async function executeDurationOrComplementaryResynthesis(params: {
     duracion: params.newDuration,
     audienciaOTono: params.audienciaOTono,
     tonoHomiletico: params.tonoHomiletico,
+    outputPreferences: params.outputPreferences,
     phase1Data: params.phase1Data,
     verifiedSources: params.verifiedSources,
   });

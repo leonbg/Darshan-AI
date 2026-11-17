@@ -8,11 +8,24 @@ service cloud.firestore {
 
     // Hardened Global Helpers
     function isSignedIn() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
     function isValidId(id) {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwnerPrefixedId(id) {
+      return isValidId(id) &&
+        request.auth.uid is string &&
+        request.auth.uid.size() >= 1 &&
+        request.auth.uid.size() <= 120 &&
+        id.size() > request.auth.uid.size() + 1 &&
+        id[0:request.auth.uid.size() + 1] == request.auth.uid + '_';
     }
 
     function incoming() {
@@ -81,8 +94,9 @@ service cloud.firestore {
       data.centralIdea.size() <= 2000 &&
       data.essaySummary is string &&
       data.essaySummary.size() >= 1 &&
-      data.essaySummary.size() <= 15000 &&
+      data.essaySummary.size() <= 30000 &&
       data.sourcesSummary is string &&
+      data.sourcesSummary.size() >= 1 &&
       data.sourcesSummary.size() <= 4000 &&
       data.createdAt is timestamp &&
       data.updatedAt is timestamp;
@@ -122,12 +136,14 @@ service cloud.firestore {
       data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
       data.ownerId == request.auth.uid &&
       data.relationType is string &&
+      data.relationType.size() >= 1 &&
       data.relationType.size() <= 40 &&
       data.relationType in ['RELACION', 'CONTRADICCION', 'COMPLEMENTO', 'INTEGRAL'] &&
       data.comparedLabel is string &&
       data.comparedLabel.size() >= 1 &&
       data.comparedLabel.size() <= 300 &&
       data.userHypothesis is string &&
+      data.userHypothesis.size() >= 1 &&
       data.userHypothesis.size() <= 2000 &&
       data.synthesisTitle is string &&
       data.synthesisTitle.size() >= 1 &&
@@ -149,54 +165,84 @@ service cloud.firestore {
     }
 
     match /derashot_archive/{derashaId} {
-      allow get: if isSignedIn() && isValidId(derashaId) && existing().ownerId == request.auth.uid;
-      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
-      allow create: if isSignedIn() &&
-        isValidId(derashaId) &&
+      allow get: if isSignedIn() && isValidId(derashaId) && (
+        (resource != null && resource.data.ownerId == request.auth.uid) ||
+        (resource == null && isOwnerPrefixedId(derashaId))
+      );
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser() &&
+        isOwnerPrefixedId(derashaId) &&
         isValidDerashaArchiveRecord(incoming()) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
-      allow update: if isSignedIn() &&
-        isValidId(derashaId) &&
+      allow update: if (
+        isVerifiedUser() &&
         isValidDerashaArchiveRecord(incoming()) &&
-        existing().ownerId == request.auth.uid &&
-        incoming().ownerId == existing().ownerId &&
-        incoming().createdAt == existing().createdAt &&
-        incoming().updatedAt == request.time &&
-        incoming().diff(existing()).affectedKeys().hasOnly([
-          'title',
-          'centralIdea',
-          'essaySummary',
-          'sourcesSummary',
-          'updatedAt'
-        ]);
-      allow delete: if isSignedIn() && isValidId(derashaId) && existing().ownerId == request.auth.uid;
+        isOwnerPrefixedId(derashaId) && (
+          // Action: UpdateDerashaContent
+          (resource != null &&
+           existing().ownerId == request.auth.uid &&
+           incoming().ownerId == existing().ownerId &&
+           incoming().sequenceNumber == existing().sequenceNumber &&
+           incoming().createdAt == existing().createdAt &&
+           incoming().updatedAt == request.time &&
+           incoming().diff(existing()).affectedKeys().hasOnly([
+             'title',
+             'query',
+             'methodology',
+             'duration',
+             'audienceOrTone',
+             'centralIdea',
+             'essaySummary',
+             'sourcesSummary',
+             'updatedAt'
+           ]))
+        )
+      );
+      allow delete: if isVerifiedUser() && isValidId(derashaId) && (
+        (resource != null && existing().ownerId == request.auth.uid) ||
+        (resource == null && isOwnerPrefixedId(derashaId))
+      );
     }
 
     match /comparative_studies/{studyId} {
-      allow get: if isSignedIn() && isValidId(studyId) && existing().ownerId == request.auth.uid;
-      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
-      allow create: if isSignedIn() &&
-        isValidId(studyId) &&
+      allow get: if isSignedIn() && isValidId(studyId) && (
+        (resource != null && resource.data.ownerId == request.auth.uid) ||
+        (resource == null && isOwnerPrefixedId(studyId))
+      );
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser() &&
+        isOwnerPrefixedId(studyId) &&
         isValidComparativeDerashaStudy(incoming()) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
-      allow update: if isSignedIn() &&
-        isValidId(studyId) &&
+      allow update: if (
+        isVerifiedUser() &&
         isValidComparativeDerashaStudy(incoming()) &&
-        existing().ownerId == request.auth.uid &&
-        incoming().ownerId == existing().ownerId &&
-        incoming().createdAt == existing().createdAt &&
-        incoming().updatedAt == request.time &&
-        incoming().diff(existing()).affectedKeys().hasOnly([
-          'synthesisTitle',
-          'executiveVerdict',
-          'contradictionsAnalysis',
-          'complementarityAnalysis',
-          'dialecticalResolution',
-          'updatedAt'
-        ]);
-      allow delete: if isSignedIn() && isValidId(studyId) && existing().ownerId == request.auth.uid;
+        isOwnerPrefixedId(studyId) && (
+          // Action: UpdateComparativeStudyContent
+          (resource != null &&
+           existing().ownerId == request.auth.uid &&
+           incoming().ownerId == existing().ownerId &&
+           incoming().relationType == existing().relationType &&
+           incoming().comparedLabel == existing().comparedLabel &&
+           incoming().createdAt == existing().createdAt &&
+           incoming().updatedAt == request.time &&
+           incoming().diff(existing()).affectedKeys().hasOnly([
+             'userHypothesis',
+             'synthesisTitle',
+             'executiveVerdict',
+             'contradictionsAnalysis',
+             'complementarityAnalysis',
+             'dialecticalResolution',
+             'updatedAt'
+           ]))
+        )
+      );
+      allow delete: if isVerifiedUser() && isValidId(studyId) && (
+        (resource != null && existing().ownerId == request.auth.uid) ||
+        (resource == null && isOwnerPrefixedId(studyId))
+      );
     }
   }
 }

@@ -17,6 +17,10 @@ import {
   Phase1AnalysisResult,
   VerifiedSefariaSource,
   MishnatHaDorotQuote,
+  DerashaOutputPreferences,
+  PardesLevelKey,
+  PardesAnalysisDepth,
+  ConclusionLength,
 } from '../../types';
 import { ExportScope } from '../layout/ExportModal';
 import { AtrilReadingScale } from '../../hooks/useAtrilPreferences';
@@ -60,6 +64,13 @@ interface ActiveDerashaWorkspaceViewProps {
     specificAngle?: string
   ) => Promise<void>;
   onSaveMishnatHaDorotQuotes?: (quotes: MishnatHaDorotQuote[]) => void;
+  outputPreferences?: DerashaOutputPreferences;
+  onChangePardesDepth?: (level: PardesLevelKey, depth: PardesAnalysisDepth) => void;
+  onTogglePrioritizedPardesLevel?: (level: PardesLevelKey) => void;
+  onChangeConclusionLength?: (length: ConclusionLength) => void;
+  onApplyAllPardesDepth?: (depth: PardesAnalysisDepth) => void;
+  onResetOutputPreferences?: () => void;
+  onRegenerateWithOutputPreferences?: () => void;
 }
 
 export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProps> = React.memo(
@@ -87,6 +98,13 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
     onTranslateAllSources,
     onRequestMasterReadings,
     onSaveMishnatHaDorotQuotes,
+    outputPreferences,
+    onChangePardesDepth,
+    onTogglePrioritizedPardesLevel,
+    onChangeConclusionLength,
+    onApplyAllPardesDepth,
+    onResetOutputPreferences,
+    onRegenerateWithOutputPreferences,
   }) => {
     const [viewMode, setViewMode] = useState<'essay' | 'summary' | 'cards'>('essay');
     const [isDeepBreakdownOpen, setIsDeepBreakdownOpen] = useState(false);
@@ -255,6 +273,13 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
               isTranslatingRef={translatingRef}
               isTranslatingAll={isTranslatingAll}
               onSaveMishnatHaDorotQuotes={onSaveMishnatHaDorotQuotes}
+              outputPreferences={outputPreferences}
+              onChangePardesDepth={onChangePardesDepth}
+              onTogglePrioritizedPardesLevel={onTogglePrioritizedPardesLevel}
+              onChangeConclusionLength={onChangeConclusionLength}
+              onApplyAllPardesDepth={onApplyAllPardesDepth}
+              onResetOutputPreferences={onResetOutputPreferences}
+              onRegenerateWithOutputPreferences={onRegenerateWithOutputPreferences}
             />
           </section>
         ) : viewMode === 'summary' ? (
@@ -285,6 +310,7 @@ export const ActiveDerashaWorkspaceView: React.FC<ActiveDerashaWorkspaceViewProp
               <section id="conclusion-section">
                 <PracticalConclusionCard
                   conclusion={finalDerasha.practicalConclusion}
+                  conclusionLength={finalDerasha.outputPreferences?.conclusionLength}
                   onExport={handleOpenPardesExport}
                 />
               </section>
